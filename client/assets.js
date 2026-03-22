@@ -44,41 +44,14 @@ const base64 = {
 };
 
 // Input: a target filename and the data to download to it.
-// Output: a Promise that resolves to a description of where to find the
-//         downloaded file: in Downloads, on web, or in ~/Inkstone on mobile.
+// Output: a Promise that resolves to a description of where to find the file.
 const download = (filename, data) => {
-  return kStartup.then(() => new Promise((resolve, reject) => {
-    if (Meteor.isCordova) {
-      const fragments = [cordova.file.externalRootDirectory, 'Inkstone'];
-      const target =  `${fragments.join('')}/${filename}`;
-      fileWriteHelper(fragments, filename, data, /*exclusive=*/true)
-          .then(() => resolve(target.substr('file://'.length)))
-          .catch((error) => reject(error));
-    } else {
-      const link = document.createElement('a');
-      link.href = `data:text/plain;charset:utf-8;base64,${base64.encode(data)}`;
-      link.download = filename;
-      link.click();
-      resolve('Downloads folder.');
-    }
-  }));
-}
-
-// Input: a list of path fragments in a Cordova filesystem, a file to write
-//        at the directory given by those fragments, the data to write to it,
-//        and an "exclusive" bit that should be set if overwriting the file
-//        is an error.
-// Output: a Promise that resolves to true if the write is successful.
-const fileWriteHelper = (fragments, filename, data, exclusive) => {
-  const directory = getDirectoryEntry(fragments);
-  return directory.then((entry) => new Promise((resolve, reject) => {
-    entry.getFile(filename, {create: true, exclusive: exclusive}, (file) => {
-      file.createWriter((writer) => {
-        writer.onerror = reject;
-        writer.onwriteend = () => resolve(true);
-        writer.write(new Blob([data]), {type: 'text/plain'});
-      }, reject);
-    }, (error) => reject(exclusive ? 'Error: file already exists.' : error));
+  return kStartup.then(() => new Promise((resolve) => {
+    const link = document.createElement('a');
+    link.href = `data:text/plain;charset:utf-8;base64,${base64.encode(data)}`;
+    link.download = filename;
+    link.click();
+    resolve('Downloads folder.');
   }));
 }
 
@@ -86,59 +59,23 @@ const isImportedAsset = (asset) => {
   return asset.startsWith('characters/') || asset.startsWith('lists/s/');
 }
 
-// Input: a list of path fragments in a Cordova filesystem
-// Output: the entry of the directory given by fragments.join('/'), which is
-//         created recursively if folders on the path do not already exist.
-const getDirectoryEntry = (fragments, root) => {
-  if (fragments.length === 0 && !root) return Promise.reject('No fragments.');
-  if (fragments.length === 0) return Promise.resolve(root);
-
-  // Optimization: if we're not in a recursive call, and if the directory
-  // already exists, use resolveLocalFileSystemUrl to get it immediately.
-  const full_path = fragments.join('/');
-  const if_exists =
-    root ? Promise.reject('Cannot skip ahead during recursion.')
-         : new Promise((resolve, reject) =>
-              window.resolveLocalFileSystemURL(full_path, resolve, reject));
-
-  // Slow but sure main algorithm. Iterate over the fragments of the path,
-  // traversing the tree and creating each directory if it does not exist.
-  return if_exists.catch(() => new Promise((resolve, reject) => {
-    const recurse = (entry) => getDirectoryEntry(fragments.slice(1), entry)
-                                  .then(resolve).catch(reject);
-    root ? root.getDirectory(fragments[0], {create: true}, recurse, reject)
-         : window.resolveLocalFileSystemURL(fragments[0], recurse, reject);
-  }));
-}
-
-// Input: a path to an asset in cordova-build-overrides/www/assets
-// Output: a Promise that resolves to the String contents of that file
+// Input: a path to an asset in www/assets
+// Output: a Promise that resolves to the String contents of that file.
+// Imported assets (user data) are stored in localStorage; bundled assets
+// are fetched from the app bundle via fetch().
 const readAsset = (path) => {
   const blocker = isImportedAsset(path) ? kLoaded : kStartup;
-  return blocker.then(() => new Promise((resolve, reject) => {
-    if (Meteor.isCordova) {
-      try {
-        // On Cordova, imported assets are in the data directory, not the app.
-        const root = isImportedAsset(path) ?
-            cordova.file.dataDirectory : cordova.file.applicationDirectory;
-        const url = `${root}www/assets/${path}`;
-        window.resolveLocalFileSystemURL(url, (entry) => {
-          entry.file((file) => {
-            const reader = new FileReader;
-            reader.onerror = reject;
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsText(file);
-          }, reject);
-        }, reject);
-      } catch (e) {
-        reject(e);
-      }
-    } else {
-      Meteor.call('readAsset', path, (error, data) => {
-        error ? reject(error) : resolve(data);
-      });
+  return blocker.then(() => {
+    // Check localStorage first for user-imported assets
+    if (isImportedAsset(path)) {
+      const stored = localStorage.getItem('asset:' + path);
+      if (stored !== null) return stored;
     }
-  }));
+    return fetch(`/assets/${path}`).then((r) => {
+      if (!r.ok) throw new Error(`Asset not found: ${path}`);
+      return r.text();
+    });
+  });
 }
 
 // Input: a single Chinese character
@@ -222,56 +159,31 @@ const readList = (list) => {
   });
 }
 
-// Input: a path to an asset in cordova-build-overrides/www/assets
-// Output: a Promise that resolves when that asset is removed
+// Input: a path to an asset in www/assets
+// Output: a Promise that resolves when that asset is removed from localStorage
 const removeAsset = (path) => {
   if (!isImportedAsset(path)) {
     return Promise.reject(`Tried to remove static asset: ${path}`);
   }
-  return kStartup.then(() => new Promise((resolve, reject) => {
-    if (Meteor.isCordova) {
-      try {
-        const url = `${cordova.file.dataDirectory}www/assets/${path}`;
-        window.resolveLocalFileSystemURL(
-            url, (entry) => entry.remove(resolve, reject), reject);
-      } catch (e) {
-        reject(e);
-      }
-    } else {
-      Meteor.call('removeAsset', path, (error, data) => {
-        error ? reject(error) : resolve();
-      });
-    }
-  }));
+  return kStartup.then(() => {
+    localStorage.removeItem('asset:' + path);
+  });
 }
 
 // Deletes the given list and resolves when it is removed.
 const removeList = (list) => removeAsset(`lists/${list}.list`);
 
-// Input: a path to an asset in cordova-build-overrides/www/assets, and data
-//        to write to the asset at that path.
+// Input: a path to an asset in www/assets, and data to write.
 // Output: a Promise that resolves to true if the write is successful.
+// User-imported assets are stored in localStorage.
 const writeAsset = (path, data) => {
   if (!isImportedAsset(path)) {
     return Promise.reject(`Tried to write static asset: ${path}`);
   }
-  return kStartup.then(() => new Promise((resolve, reject) => {
-    if (Meteor.isCordova) {
-      try {
-        const prefix = [cordova.file.dataDirectory, 'www', 'assets'];
-        const fragments = prefix.concat(path.split('/'));
-        const filename = fragments.pop();
-        fileWriteHelper(fragments, filename, data, /*exclusive=*/false)
-            .then(resolve).catch(reject);
-      } catch (e) {
-        reject(e);
-      }
-    } else {
-      Meteor.call('writeAsset', path, data, (error) => {
-        error ? reject(error) : resolve(true);
-      });
-    }
-  }));
+  return kStartup.then(() => {
+    localStorage.setItem('asset:' + path, data);
+    return true;
+  });
 }
 
 // Input: an character Object (with format defined by the Match expression)

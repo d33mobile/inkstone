@@ -1,6 +1,12 @@
-const child_process = Npm.require('child_process');
-const fs = Npm.require('fs');
-const readline = Npm.require('readline');
+// Guard server-only requires — this file gets bundled into client on Cordova builds
+let child_process, fs, readline;
+if (typeof Npm !== 'undefined') {
+  try {
+    child_process = Npm.require('child_process');
+    fs = Npm.require('fs');
+    readline = Npm.require('readline');
+  } catch(e) { /* Not available in client bundle */ }
+}
 
 import {CharacterData, assetForCharacter} from '/lib/characters';
 import {Decomposition} from '/lib/decomposition';

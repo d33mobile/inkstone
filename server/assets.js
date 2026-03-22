@@ -18,7 +18,11 @@
  *  along with Inkstone.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-const fs = Npm.require('fs');
+// Guard server-only require — this file gets bundled into client on Cordova builds
+let fs;
+if (typeof Npm !== 'undefined') {
+  try { fs = Npm.require('fs'); } catch(e) { /* Not available in client */ }
+}
 
 const asset = (path) => {
   const directory = 'cordova-build-override/www/assets';

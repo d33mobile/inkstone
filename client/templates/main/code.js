@@ -37,14 +37,9 @@ Transitioner.default({in: 'transition.fadeIn', out: 'transition.fadeOut'});
 
 // Set up global template helpers.
 
-const kDisabledEvents = {'native.keyboardhide': 1, 'native.keyboardshow': 1};
-
-if (Meteor.isCordova) {
+// Disconnect from Meteor server — app runs fully client-side
+if (Meteor.isCordova || typeof window.Capacitor !== 'undefined') {
   Meteor.disconnect();
-  const fireWindowEvent = cordova.fireWindowEvent;
-  cordova.fireWindowEvent = (type, data) => {
-    if (!kDisabledEvents[type]) fireWindowEvent(type, data);
-  }
 }
 
 Platform.isAndroid = () => false;
