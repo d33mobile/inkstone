@@ -27,7 +27,6 @@ ADD --chown=1000:1000 lib /tmp/project/lib
 ADD --chown=1000:1000 mobile-config.js /tmp/project/mobile-config.js
 ADD --chown=1000:1000 public /tmp/project/public
 ADD --chown=1000:1000 scripts /tmp/project/scripts
-ADD --chown=1000:1000 server /tmp/project/server
 ADD --chown=1000:1000 .meteor /tmp/project/.meteor
 WORKDIR /tmp/project
 ENV HOME=/tmp
@@ -77,6 +76,9 @@ RUN cp -f /tmp/meteor-www/*.js www/ 2>/dev/null; \
     cp -f /tmp/meteor-www/head.html www/ 2>/dev/null; \
     cp -f /tmp/meteor-www/program.json www/ 2>/dev/null; \
     sed -i 's|<script[^>]*src="/cordova.js"[^>]*></script>||g' www/index.html && \
+    cp -rn /tmp/meteor-www/app/fonts www/fonts 2>/dev/null; \
+    cp -rn /tmp/meteor-www/app/graphics www/graphics 2>/dev/null; \
+    cp -rn /tmp/meteor-www/app/sources www/sources 2>/dev/null; \
     rm -rf /tmp/meteor-www
 
 # Capacitor sync + Android build
