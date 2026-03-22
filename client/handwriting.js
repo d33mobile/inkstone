@@ -291,6 +291,14 @@ class Handwriting {
     this._layers[Layer.HINT].addChild(child);
     this._fade(child, 750);
   }
+  warn(message) {
+    const text = new createjs.Text(message, `${this._size / 12}px sans-serif`, kHintColor);
+    text.textAlign = 'center';
+    text.x = this._size / 2;
+    text.y = this._size / 10;
+    this._layers[Layer.HINT].addChild(text);
+    this._fade(text, 1500);
+  }
   glow(result) {
     this._emplacements.forEach((args) => this._emplace(args));
     this._emplacements = [];

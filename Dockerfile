@@ -3,24 +3,18 @@ FROM thyrlian/android-sdk:6.1
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL=https://services.gradle.org/distributions/gradle-2.2.1-all.zip
 
-RUN apt-get update && apt-get install nodejs curl -y && apt-get clean
+RUN apt-get update && apt-get install nodejs curl ca-certificates -y && apt-get clean && update-ca-certificates
 
-RUN curl https://install.meteor.com/ | sh
+RUN curl https://install.meteor.com/?release=1.4.1.3 | sh
 
 # FIXME: probably not everything listed here is needed.
 RUN /opt/android-sdk/cmdline-tools/tools/bin/sdkmanager \
     "build-tools;28.0.3"\
-    "emulator"\
     "extras;android;m2repository"\
     "extras;google;m2repository"\
-    "extras;m2repository;com;android;support;constraint;constraint-layout-solver;1.0.2"\
-    "extras;m2repository;com;android;support;constraint;constraint-layout;1.0.2"\
-    "patcher;v4"\
     "platform-tools"\
-    "platforms;android-14"\
     "platforms;android-23"\
     "platforms;android-28"\
-    "sources;android-23" \
     >/dev/null
 
 # workaround: new versions of Android tools don't build our setup
@@ -49,6 +43,7 @@ ENV HOME=/tmp
 ENV ANDROID_HOME=/opt/android-sdk
 ENV PATH=$PATH:/opt/android-sdk/tools/
 
+ENV NODE_TLS_REJECT_UNAUTHORIZED=0
 RUN meteor build .build --server localhost:3785 --allow-superuser
 RUN cp -R cordova-build-override/* .build/android/project/assets/.
 RUN cd .build/android/project/cordova ; ./build --release

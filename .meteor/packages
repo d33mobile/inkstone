@@ -22,7 +22,7 @@ standard-minifier-css@1.2.0_1
 standard-minifier-js@1.2.0_1
 modules@0.7.6_1
 meteoric:ionic
-crosswalk@1.6.2
+# crosswalk@1.6.2  # Removed: Crosswalk project is dead, repo offline
 reactive-dict@1.1.8
 fourseven:scss
 shell-server@0.2.1
