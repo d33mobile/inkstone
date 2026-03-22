@@ -154,6 +154,32 @@ else
     fail "No word list files found"
 fi
 
+# --- Test 6: Bundled character data ---
+echo ""
+echo "[6] Bundled character data"
+CHAR_V2_DIR="$WWW_DIR/assets/characters_v2"
+if [ -d "$CHAR_V2_DIR" ]; then
+    V2_COUNT=$(ls "$CHAR_V2_DIR" | wc -l)
+    V2_SIZE=$(du -sh "$CHAR_V2_DIR" | cut -f1)
+    if [ "$V2_COUNT" -gt 50 ]; then
+        pass "Found $V2_COUNT character_v2 asset files ($V2_SIZE)"
+    else
+        fail "Only $V2_COUNT character_v2 files (expected 90+)"
+    fi
+    # Spot-check: verify a file is valid NDJSON
+    SAMPLE_FILE=$(ls "$CHAR_V2_DIR" | head -1)
+    if [ -n "$SAMPLE_FILE" ]; then
+        FIRST_LINE=$(head -1 "$CHAR_V2_DIR/$SAMPLE_FILE")
+        if echo "$FIRST_LINE" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
+            pass "character_v2 files contain valid JSON"
+        else
+            fail "character_v2 files have invalid JSON"
+        fi
+    fi
+else
+    fail "No characters_v2 directory in bundled assets"
+fi
+
 # --- Summary ---
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

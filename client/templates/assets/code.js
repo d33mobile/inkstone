@@ -98,9 +98,10 @@ const onComplete = (success, message) => {
   if (success) onAssetsLoaded();
 }
 
+// Character data is now bundled in the APK as characters_v2/ files.
+// Skip the download check entirely and signal that assets are loaded.
 Meteor.setTimeout(() => {
-  kCharacters.then(computeMissingAssets)
-             .then((items) => onComplete(/*success=*/items.length === 0));
+  onComplete(/*success=*/true);
 }, 100);
 
 Template.assets.events({'click .start': onClick});

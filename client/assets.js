@@ -17,10 +17,13 @@
  *  along with Inkstone.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import {CharacterData} from '/lib/characters';
+import {CharacterData, assetForCharacter} from '/lib/characters';
 
 const kListColumns = [
   'simplified', 'traditional', 'numbered', 'pinyin', 'definition'];
+
+// Cache for bundled character_v2 asset files (parsed from NDJSON)
+const kCharacterCache = {};
 
 // onAssetsLoaded is a callback that is executed when all required assets,
 // such as the character data files, are saved to the asset store.
@@ -143,8 +146,24 @@ const readAsset = (path) => {
 //         data required in writeCharacter, below
 const readCharacter = (character) => {
   if (!character) return Promise.reject('No character provided.');
-  const path = `characters/${character.codePointAt(0)}`;
-  return readAsset(path).then(JSON.parse);
+  // First try to read from bundled characters_v2 assets (NDJSON format).
+  const asset = assetForCharacter(character);
+  if (!kCharacterCache[asset]) {
+    kCharacterCache[asset] = readAsset(asset).then((data) => {
+      const map = {};
+      data.split('\n').filter((x) => x).forEach((line) => {
+        const parsed = JSON.parse(line);
+        map[parsed.character] = parsed;
+      });
+      return map;
+    }).catch(() => null);
+  }
+  return kCharacterCache[asset].then((map) => {
+    if (map && map[character]) return map[character];
+    // Fallback: try individual character file (legacy imported data)
+    const path = `characters/${character.codePointAt(0)}`;
+    return readAsset(path).then(JSON.parse);
+  });
 }
 
 // Input: an item, which includes a word and a list of lists it appears in
