@@ -1,0 +1,29 @@
+{
+  "name": "inkstone",
+  "version": "1.0.0",
+  "description": "![Inkstone in action](http://i.imgur.com/FetiXVc.gif)",
+  "main": "mobile-config.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/getinkstone/inkstone.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/getinkstone/inkstone/issues"
+  },
+  "homepage": "https://github.com/getinkstone/inkstone#readme",
+  "dependencies": {
+    "@capacitor/android": "^8.2.0",
+    "@capacitor/cli": "^8.2.0",
+    "@capacitor/core": "^8.2.0",
+    "@capacitor/filesystem": "^8.1.2"
+  }
+}

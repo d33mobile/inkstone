@@ -8,8 +8,21 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-APK_PATH="$PROJECT_DIR/.build/apk/project-release-unsigned.apk"
-WWW_DIR="$PROJECT_DIR/.build/www"
+# Support both Cordova (legacy) and Capacitor APK paths
+CAPACITOR_APK="$PROJECT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+CORDOVA_APK="$PROJECT_DIR/.build/apk/project-release-unsigned.apk"
+if [ -f "$CAPACITOR_APK" ]; then
+    APK_PATH="$CAPACITOR_APK"
+elif [ -f "$CORDOVA_APK" ]; then
+    APK_PATH="$CORDOVA_APK"
+else
+    APK_PATH="$CORDOVA_APK"  # will fail the test
+fi
+WWW_DIR="$PROJECT_DIR/www"
+# Fallback to legacy build dir
+if [ ! -d "$WWW_DIR/assets" ] && [ -d "$PROJECT_DIR/.build/www" ]; then
+    WWW_DIR="$PROJECT_DIR/.build/www"
+fi
 ANDROID_HOME="${ANDROID_HOME:-$HOME/android-sdk}"
 
 PASS=0
@@ -30,9 +43,14 @@ else
 fi
 
 if [ -f "$APK_PATH" ]; then
-    AAPT="$(find "$ANDROID_HOME/build-tools" -name aapt 2>/dev/null | head -1)"
-    if [ -n "$AAPT" ]; then
+    AAPT2="$(find "$ANDROID_HOME/build-tools" -name aapt2 2>/dev/null | sort -r | head -1)"
+    AAPT="$(find "$ANDROID_HOME/build-tools" -name aapt -not -name aapt2 2>/dev/null | head -1)"
+    if [ -n "$AAPT2" ]; then
+        BADGING=$("$AAPT2" dump badging "$APK_PATH" 2>&1)
+    elif [ -n "$AAPT" ]; then
         BADGING=$("$AAPT" dump badging "$APK_PATH" 2>&1)
+    fi
+    if [ -n "$AAPT2" ] || [ -n "$AAPT" ]; then
         if echo "$BADGING" | grep -q "package: name="; then
             pass "APK has valid package info"
         else
@@ -114,14 +132,23 @@ if [ -n "$INDEX_HTML" ]; then
     # Verify the referenced JS/CSS files actually exist
     JS_FILE=$(grep -oP '/([a-f0-9]+\.js)' "$INDEX_HTML" | head -1 | sed 's|^/||')
     CSS_FILE=$(grep -oP '/([a-f0-9]+\.css)' "$INDEX_HTML" | head -1 | sed 's|^/||')
-    if [ -n "$JS_FILE" ] && [ -f "$WWW_DIR/application/$JS_FILE" ]; then
-        JS_SIZE=$(du -h "$WWW_DIR/application/$JS_FILE" | cut -f1)
+    # Look in both www/ (Capacitor) and www/application/ (Cordova)
+    JS_FOUND=""
+    for dir in "$WWW_DIR" "$WWW_DIR/application"; do
+        [ -f "$dir/$JS_FILE" ] && JS_FOUND="$dir/$JS_FILE"
+    done
+    CSS_FOUND=""
+    for dir in "$WWW_DIR" "$WWW_DIR/application"; do
+        [ -f "$dir/$CSS_FILE" ] && CSS_FOUND="$dir/$CSS_FILE"
+    done
+    if [ -n "$JS_FOUND" ]; then
+        JS_SIZE=$(du -h "$JS_FOUND" | cut -f1)
         pass "JS bundle exists ($JS_FILE, $JS_SIZE)"
     else
         fail "JS bundle file missing"
     fi
-    if [ -n "$CSS_FILE" ] && [ -f "$WWW_DIR/application/$CSS_FILE" ]; then
-        CSS_SIZE=$(du -h "$WWW_DIR/application/$CSS_FILE" | cut -f1)
+    if [ -n "$CSS_FOUND" ]; then
+        CSS_SIZE=$(du -h "$CSS_FOUND" | cut -f1)
         pass "CSS bundle exists ($CSS_FILE, $CSS_SIZE)"
     else
         fail "CSS bundle file missing"
@@ -130,18 +157,15 @@ else
     fail "No index.html found in web bundle"
 fi
 
-# --- Test 4: Cordova structure ---
+# --- Test 4: Native wrapper ---
 echo ""
-echo "[4] Cordova integration"
+echo "[4] Native wrapper"
 if [ -f "$WWW_DIR/cordova.js" ]; then
-    pass "cordova.js present"
+    pass "Cordova: cordova.js present"
+elif [ -d "$PROJECT_DIR/android/capacitor-cordova-android-plugins" ]; then
+    pass "Capacitor: Android project present"
 else
-    fail "cordova.js missing"
-fi
-if [ -f "$WWW_DIR/cordova_plugins.js" ]; then
-    pass "cordova_plugins.js present"
-else
-    fail "cordova_plugins.js missing"
+    fail "No native wrapper detected (neither Cordova nor Capacitor)"
 fi
 
 # --- Test 5: List files ---
