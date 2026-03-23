@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 # Post-processes www/index.html after Meteor build for Capacitor compatibility.
-# Fixes: cordova.js removal, deviceready shim, DDP disable, Keyboard shim.
 
 WWW_DIR="${1:-www}"
 INDEX="$WWW_DIR/index.html"
@@ -11,18 +10,22 @@ if [ ! -f "$INDEX" ]; then
     exit 1
 fi
 
-# 1. Remove cordova.js script tag
-sed -i 's|<script[^>]*src="/cordova.js"[^>]*></script>||g' "$INDEX"
+# Use Node.js for reliable HTML patching (available in our Docker image)
+node -e "
+const fs = require('fs');
+let html = fs.readFileSync('$INDEX', 'utf-8');
 
-# 2. Fix DDP URL in runtime config (replace localhost:3785 with unreachable addr)
-sed -i 's|http%3A%2F%2Flocalhost%3A3785%2F|https%3A%2F%2F0.0.0.0%3A1%2F|g' "$INDEX"
+// 1. Remove cordova.js script tag
+html = html.replace(/<script[^>]*src=[\"']\/cordova\.js[\"'][^>]*><\/script>/g, '');
 
-# 3. Remove Android 10.0.2.2 redirect block (no longer needed)
-sed -i '/if.*Android.*test.*navigator/,/}$/d' "$INDEX"
+// 2. Fix DDP URL to unreachable address
+html = html.replace(/http%3A%2F%2Flocalhost%3A3785%2F/g, 'https%3A%2F%2F0.0.0.0%3A1%2F');
 
-# 4. Inject Capacitor compatibility shim before </head>
-SHIM='<script type="text/javascript">
-// Capacitor compatibility shims for Meteor/Cordova/Ionic
+// 3. Remove Android 10.0.2.2 redirect block
+html = html.replace(/if\s*\(\/Android\/i\.test[\s\S]*?}\s*}\s*\n/g, '');
+
+// 4. Inject Capacitor shim before </head>
+const shim = \`<script type=\"text/javascript\">
 window.WebAppLocalServer = window.WebAppLocalServer || new Proxy({}, {
   get: function(t, p) { return p in t ? t[p] : function(){}; }
 });
@@ -36,21 +39,21 @@ function _ensureCordova() {
 _ensureCordova();
 var _si = setInterval(_ensureCordova, 50);
 setTimeout(function() { clearInterval(_si); }, 5000);
-document.addEventListener("DOMContentLoaded", function() {
+document.addEventListener(\"DOMContentLoaded\", function() {
   _ensureCordova();
-  document.dispatchEvent(new Event("deviceready"));
+  document.dispatchEvent(new Event(\"deviceready\"));
 });
-</script>'
+</script>\`;
 
-# Escape for sed
-SHIM_ESCAPED=$(echo "$SHIM" | sed ':a;N;$!ba;s/\n/\\n/g' | sed 's/&/\\&/g')
-sed -i "s|</head>|${SHIM_ESCAPED}</head>|" "$INDEX"
+html = html.replace('</head>', shim + '</head>');
 
-# 5. Copy fonts/graphics/sources to www root (CSS expects them there)
+fs.writeFileSync('$INDEX', html);
+console.log('Patched $INDEX successfully');
+"
+
+# 5. Copy fonts/graphics/sources to www root
 for dir in fonts graphics sources; do
     if [ -d "$WWW_DIR/app/$dir" ] && [ ! -d "$WWW_DIR/$dir" ]; then
         cp -r "$WWW_DIR/app/$dir" "$WWW_DIR/$dir"
     fi
 done
-
-echo "Patched $INDEX successfully"

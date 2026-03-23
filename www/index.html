@@ -12,52 +12,36 @@
   <link rel="stylesheet" type="text/css" class="__meteor-css__" href="/f806db10030d3d9140faf3f6976d608feb7360e4.css?meteor_css_resource=true">
 
   <script type="text/javascript">
-    __meteor_runtime_config__ = JSON.parse(decodeURIComponent("%7B%22meteorRelease%22%3A%22METEOR%401.4.1.3%22%2C%22ROOT_URL%22%3A%22https%3A%2F%2Flocalhost%2F%22%2C%22ROOT_URL_PATH_PREFIX%22%3A%22%22%2C%22DDP_DEFAULT_CONNECTION_URL%22%3A%22https%3A%2F%2F0.0.0.0%3A1%2F%22%2C%22appId%22%3A%22126c0rsxlvjwv18cf44u%22%2C%22meteorEnv%22%3A%7B%22NODE_ENV%22%3A%22production%22%2C%22TEST_METADATA%22%3A%22%7B%7D%22%7D%7D"));
-  </script>
+    __meteor_runtime_config__ = JSON.parse(decodeURIComponent("%7B%22meteorRelease%22%3A%22METEOR%401.4.1.3%22%2C%22ROOT_URL%22%3A%22https%3A%2F%2F0.0.0.0%3A1%2F%22%2C%22ROOT_URL_PATH_PREFIX%22%3A%22%22%2C%22DDP_DEFAULT_CONNECTION_URL%22%3A%22https%3A%2F%2F0.0.0.0%3A1%2F%22%2C%22autoupdateVersionCordova%22%3A%22af4ecae25d563b5011c4ca17f19787a239e69ab3%22%2C%22appId%22%3A%22126c0rsxlvjwv18cf44u%22%2C%22meteorEnv%22%3A%7B%22NODE_ENV%22%3A%22production%22%2C%22TEST_METADATA%22%3A%22%7B%7D%22%7D%7D"));
 
-  <script type="text/javascript">
-    // Shims for Capacitor: Meteor/Cordova/Ionic APIs that don't exist in Capacitor
-    // Full WebAppLocalServer shim — Meteor Cordova hot-code-push API
-    window.WebAppLocalServer = window.WebAppLocalServer || new Proxy({}, {
-      get: function(target, prop) {
-        if (prop in target) return target[prop];
-        return function() {}; // All methods are no-ops
-      }
-    });
-    // Keyboard shim — Ionic expects cordova.plugins.Keyboard
-    var _kbShim = {
-      close: function(){}, show: function(){},
-      hideKeyboardAccessoryBar: function(){},
-      showKeyboardAccessoryBar: function(){},
-      disableScroll: function(){}, enableScroll: function(){}
-    };
-    // Set up cordova.plugins.Keyboard, handling cases where cordova may be
-    // set/overwritten later by Capacitor or Meteor
-    function _ensureCordovaShims() {
-      if (!window.cordova) window.cordova = {};
-      if (!window.cordova.plugins) window.cordova.plugins = {};
-      if (!window.cordova.plugins.Keyboard) window.cordova.plugins.Keyboard = _kbShim;
-      if (!window.cordova.fireWindowEvent) window.cordova.fireWindowEvent = function(){};
-    }
-    _ensureCordovaShims();
-    // Re-apply shims periodically in case something overwrites cordova
-    var _shimInterval = setInterval(function() {
-      _ensureCordovaShims();
-    }, 50);
-    setTimeout(function() { clearInterval(_shimInterval); }, 5000);
-    // Fire deviceready so Meteor.startup() proceeds
-    document.addEventListener('DOMContentLoaded', function() {
-      _ensureCordovaShims();
-      document.dispatchEvent(new Event('deviceready'));
-    });
-  </script>
-  <script type="text/javascript" src="/19b39d4451677ce6709cbe2f71f1a8e6e1bdff05.js?meteor_js_resource=true"></script>
+      </script>
+
+  
+  <script type="text/javascript" src="/b001ea39fb8fb87a70ce23be83c16753750f7fdc.js?meteor_js_resource=true"></script>
 
 
   <title>Inkstone</title>
   <meta name="viewport" content="
       width=device-width, user-scalable=no, initial-scale=1">
-</head>
+<script type="text/javascript">
+window.WebAppLocalServer = window.WebAppLocalServer || new Proxy({}, {
+  get: function(t, p) { return p in t ? t[p] : function(){}; }
+});
+var _kbShim = {close:function(){},show:function(){},hideKeyboardAccessoryBar:function(){},disableScroll:function(){}};
+function _ensureCordova() {
+  if (!window.cordova) window.cordova = {};
+  if (!window.cordova.plugins) window.cordova.plugins = {};
+  if (!window.cordova.plugins.Keyboard) window.cordova.plugins.Keyboard = _kbShim;
+  if (!window.cordova.fireWindowEvent) window.cordova.fireWindowEvent = function(){};
+}
+_ensureCordova();
+var _si = setInterval(_ensureCordova, 50);
+setTimeout(function() { clearInterval(_si); }, 5000);
+document.addEventListener("DOMContentLoaded", function() {
+  _ensureCordova();
+  document.dispatchEvent(new Event("deviceready"));
+});
+</script></head>
 
 <body>
   

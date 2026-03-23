@@ -44,6 +44,7 @@ const enableList = (list) => {
     const charset = Settings.get('character_set');
     rows.forEach((row) => Vocabulary.addItem(row[charset], list));
     Lists.enable(list);
+    Tracker.flush();  // Force reactive recalculation of card counts
     Backdrop.hide(kBackdropTimeout);
   }).catch((error) => {
     console.error(error);
@@ -70,6 +71,7 @@ const setCharacterSet = (charset) => {
       rows.forEach((row) => Vocabulary.addItem(row[charset], list));
     });
     Settings.set('character_set', charset);
+    Tracker.flush();  // Force reactive recalculation
     Backdrop.hide(kBackdropTimeout);
   }).catch((error) => {
     console.error(error);
