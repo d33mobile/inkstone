@@ -48,11 +48,30 @@
           Scheduling
         {{/ionItem}}
         {{> ionInput variable="settings.max_adds" type="number"
-                     label="New Cards Per Day"}}
+                     label="New Cards Per Session"}}
         {{> ionInput variable="settings.max_reviews" type="number"
-                     label="Reviews Per Day"}}
+                     label="Reviews Per Session"}}
         {{> ionToggle variable="settings.revisit_failures"
                       label="Revisit Failures"}}
+        {{> ionSelect variable="settings.session_duration"
+                      label="Session Duration" options=durations}}
+      </div>
+      <div class="block settings-algorithm">
+        {{#ionItem class="item-divider"}}
+          Algorithm (Anki SM-2)
+        {{/ionItem}}
+        {{> ionInput variable="settings.learn_steps" type="text"
+                     label="Learning Steps (min)"}}
+        {{> ionInput variable="settings.relearn_steps" type="text"
+                     label="Relearning Steps (min)"}}
+        {{> ionInput variable="settings.graduating_interval_good" type="number"
+                     label="Graduating Interval (days)"}}
+        {{> ionInput variable="settings.graduating_interval_easy" type="number"
+                     label="Easy Interval (days)"}}
+        {{> ionInput variable="settings.starting_ease" type="number"
+                     label="Starting Ease (%)"}}
+        {{> ionInput variable="settings.maximum_review_interval" type="number"
+                     label="Max Interval (days)"}}
       </div>
       <div class="block settings-writing">
         {{#ionItem class="item-divider"}}

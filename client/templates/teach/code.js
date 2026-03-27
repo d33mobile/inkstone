@@ -203,6 +203,7 @@ const onErrorCard = (card) => {
   helpers.clear();
   helpers.set('deck', card.deck);
   helpers.set('error', card.data.error);
+  helpers.set('next_session', card.data.next_session);
   helpers.set('options', card.data.options);
   updateItem(card, {characters: []});
 }
@@ -327,6 +328,9 @@ Template.teach.events({
     if (this.extra) {
       transition();
       Timing.addExtraCards(this.extra);
+    } else if (this.continue) {
+      transition();
+      Timing.continueSession();
     } else if (this.link) {
       Router.go(this.link);
     } else {

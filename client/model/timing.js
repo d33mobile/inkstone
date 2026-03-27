@@ -31,7 +31,7 @@ import {assert} from '/lib/base';
 // card counts for the current session and the timestamp at which it began.
 // On each frame, we check whether the current session is over.
 
-const kSessionDuration = 10 * 60;
+const getSessionDuration = (counts) => counts.duration || 600;
 
 const timing = new PersistentVar('timing');
 
@@ -48,17 +48,19 @@ const newCounts = (ts) => ({
   reviews: 0,
   min_cards: 0,
   ts: ts,
+  duration: Settings.get('session_duration'),
 });
 
 const tick = () => {
   const now = Date.timestamp();
   const counts = timing.get() || {ts: -Infinity};
-  const wait = counts.ts + kSessionDuration - now;
+  const duration = getSessionDuration(counts);
+  const wait = counts.ts + duration - now;
   if (wait > 0) {
     time_left.set(wait);
   } else {
     timing.set(newCounts(now));
-    time_left.set(kSessionDuration);
+    time_left.set(Settings.get('session_duration'));
   }
 }
 
@@ -81,24 +83,32 @@ const buildErrorCard = (counts, extra) => {
     };
     return {data: data, deck: 'errors'};
   }
-  const error = "You're done for the day!";
-  const options = [{
-    link: 'settings',
-    text: 'Change scheduling settings',
-  }];
+  const error = "You're done for now!";
+  const nextSessionTs = counts.ts + getSessionDuration(counts);
+  const nextDate = new Date(nextSessionTs * 1000);
+  const h = nextDate.getHours();
+  const m = nextDate.getMinutes().toString().padStart(2, '0');
+  const next_session = `Next session at ${h % 12 || 12}:${m} ${h >= 12 ? 'PM' : 'AM'}`;
+  const options = [];
   if (extra > 0) {
     const total = counts.adds + counts.reviews;
-    options.unshift({
+    options.push({
       extra: {min_cards: extra + total, ts: counts.ts},
       text: `Add ${extra} cards to today's deck`,
     });
-  } else {
+  }
+  options.push({continue: true, text: 'Continue practicing'});
+  options.push({
+    link: 'settings',
+    text: 'Change scheduling settings',
+  });
+  if (extra <= 0) {
     options.push({
       link: 'lists',
       text: 'Enable another word list',
     });
   }
-  return {data: {error: error, options: options}, deck: 'errors'};
+  return {data: {error, next_session, options}, deck: 'errors'};
 }
 
 const draw = (deck, ts) => {
@@ -110,7 +120,7 @@ const draw = (deck, ts) => {
 const getters = {
   adds: (ts) => Vocabulary.getNewItems(),
   extras: (ts) => Vocabulary.getExtraItems(ts),
-  failures: (ts) => Vocabulary.getFailuresInRange(ts, ts + kSessionDuration),
+  failures: (ts) => Vocabulary.getFailuresInRange(ts, ts + getSessionDuration(timing.get() || {})),
   reviews: (ts) => Vocabulary.getItemsDueBy(ts, ts),
 };
 
@@ -128,6 +138,21 @@ const shuffle = () => {
   const left = remainder.get();
   if (!counts || !left) return;
 
+  // Priority 1: Learning/relearning cards whose step timer has expired.
+  // In Anki, due learning cards always preempt reviews.
+  if (left.failures > 0) {
+    const now = Date.timestamp();
+    const end = counts.ts + getSessionDuration(counts);
+    const due = Vocabulary.getDueFailures(counts.ts, end, now);
+    if (due.count() > 0) {
+      const data = due.next();
+      assert(data, 'Drew from empty due failures');
+      next_card.set({data, deck: 'failures', ts: counts.ts});
+      return;
+    }
+  }
+
+  // Priority 2: New cards and reviews.
   if (left.adds + left.reviews > 0) {
     const index = Math.random() * (left.adds + left.reviews);
     const deck = index < left.adds ? 'adds' : 'reviews';
@@ -187,9 +212,8 @@ const completeCard = (card, result) => {
   }
   if (card.deck === 'failures') {
     Vocabulary.clearFailed(card.data);
-  } else {
-    Vocabulary.updateItem(card.data, result, Date.timestamp());
   }
+  Vocabulary.updateItem(card.data, result, Date.timestamp());
 }
 
 // Timing interface: reactive getters for next_card and remainder.
@@ -197,6 +221,7 @@ const completeCard = (card, result) => {
 class Timing {
   static addExtraCards(extra) { addExtraCards(extra); }
   static completeCard(card, result) { completeCard(card, result); }
+  static continueSession() { timing.set(newCounts(Date.timestamp())); }
   static getNextCard() { return next_card.get(); }
   static getRemainder() { return remainder.get(); }
   static getTimeLeft() { return time_left.get(); }

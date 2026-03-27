@@ -63,13 +63,16 @@ Template.ionRange.helpers({get: get});
 Template.ionSelect.events({
   'change select': function(event) {
     const target = event.currentTarget;
-    set(this.variable, target.options[target.selectedIndex].value);
+    let value = target.options[target.selectedIndex].value;
+    const num = Number(value);
+    if (value !== '' && !isNaN(num)) value = num;
+    set(this.variable, value);
   },
 });
 
 Template.ionSelect.helpers({
   get: (variable, value) => {
-    return get(variable) === value ? 'true' : undefined;
+    return get(variable) == value ? 'true' : undefined;
   },
 });
 

@@ -97,9 +97,7 @@ const readCharacter = (character) => {
   }
   return kCharacterCache[asset].then((map) => {
     if (map && map[character]) return map[character];
-    // Fallback: try individual character file (legacy imported data)
-    const path = `characters/${character.codePointAt(0)}`;
-    return readAsset(path).then(JSON.parse);
+    throw new Error(`Character ${character} not found in bundled data (${asset})`);
   });
 }
 

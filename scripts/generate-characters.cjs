@@ -48,7 +48,7 @@ const convertDecompositionToTree = (decomposition) => {
 };
 
 // --- Ported from lib/characters.js ---
-const assetForCharacter = (x) => `characters_v2/${Math.floor(x.charCodeAt(0) / 256)}`;
+const assetForCharacter = (x) => `characters_v2/${Math.floor(x.charCodeAt(0) / 256)}.json`;
 
 // --- Ported from server/characters.js ---
 const kDelimiter = 'BREAK';

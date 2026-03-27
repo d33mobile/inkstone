@@ -30,6 +30,14 @@ const kCharacterSets = [
   {label: 'Simplified', value: 'simplified'},
   {label: 'Traditional', value: 'traditional'},
 ];
+const kSessionDurations = [
+  {label: '5 minutes',  value: 300},
+  {label: '15 minutes', value: 900},
+  {label: '1 hour',     value: 3600},
+  {label: '2 hours',    value: 7200},
+  {label: '6 hours',    value: 21600},
+  {label: '1 day',      value: 86400},
+];
 const kCodes = ['4-7 Alpha Tango', '2-2 Beta Charlie', '3-7 Gamma Echo'];
 
 const code = new ReactiveVar();
@@ -167,4 +175,7 @@ Template.settings.events({
   },
 });
 
-Template.settings.helpers({charsets: () => kCharacterSets});
+Template.settings.helpers({
+  charsets: () => kCharacterSets,
+  durations: () => kSessionDurations,
+});

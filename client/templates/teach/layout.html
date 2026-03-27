@@ -35,6 +35,9 @@
              style="left: {{margin}}%; right: {{margin}}%;">
           <div class="error">
             {{get 'error'}}
+            {{#if get 'next_session'}}
+              <div class="next-session">{{get 'next_session'}}</div>
+            {{/if}}
             <!-- NOTE: We avoid using the each...in syntax here because this
                  link's click handler uses the option data context. -->
             {{#each get 'options'}}

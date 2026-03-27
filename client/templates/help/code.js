@@ -268,13 +268,13 @@ const kDemos = {
       $('.ionic-body .content').scrollTop(offset.top - window.innerWidth / 4);
       return true;
     },
-    highlight('.item:contains("New Cards Per Day")',
+    highlight('.item:contains("New Cards Per Session")',
               'The first setting places a limit on the number ' +
-              'of new cards added per day. Try setting it to 10.'),
+              'of new cards added per session. Try setting it to 10.'),
     () => Settings.get('max_adds') === 10,
-    highlight('.item:contains("Reviews Per Day")',
+    highlight('.item:contains("Reviews Per Session")',
               'Reviews are flashcards that you have seen before. ' +
-              'This setting bounds the number of reviews per day. ' +
+              'This setting bounds the number of reviews per session. ' +
               'Try setting it to 100.'),
     () => Settings.get('max_reviews') === 100,
     highlight('.info.right', 'Note that changes to scheduling settings are ' +

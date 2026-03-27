@@ -132,6 +132,12 @@ body {
     > .version {
       font-family: sans-serif;
       font-size: $header-height / 2;
+    }
+
+    > .build-date {
+      font-family: sans-serif;
+      font-size: $header-height / 3;
+      opacity: 0.6;
       margin-bottom: 20%;
     }
 

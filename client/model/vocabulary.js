@@ -26,6 +26,7 @@
 //  - attempts: number of times the user has seen the word
 //  - successes: number of times the user has gotten the word right
 //  - failed: true if this item should be shown again in the failures deck
+//  - ankiState: Anki NormalState JSON object (scheduling state)
 //
 // In addition, vocabulary has a 'blacklist' key whos value is a list of
 // blacklist items. Each blacklist item has the keys 'word', 'pinyin', and
@@ -34,12 +35,12 @@
 // The "updateItem" model method takes a "result" argument which should be a
 // value in the set {0, 1, 2, 3}, with higher numbers indicating that the
 // user made more errors.
-import {getNextInterval} from '/client/external/inkren/interval_quantifier';
+import {getSchedulingResult} from '/client/external/anki/adapter';
 import {PersistentDict} from '/client/model/persistence';
 
 const kNumChunks = 16;
 
-const kColumns = 'word last next lists attempts successes failed'.split(' ');
+const kColumns = 'word last next lists attempts successes failed ankiState'.split(' ');
 const kIndices = {};
 kColumns.forEach((x, i) => kIndices[x] = i);
 
@@ -56,6 +57,10 @@ const onload = (value) => {
   _.range(kNumChunks).forEach((i) => {
     cache.chunks.push(value[i] || []);
     cache.chunks[i].forEach((entry) => {
+      // Migrate old 7-column entries to 8-column (add ankiState)
+      if (entry.length < kColumns.length) {
+        entry.push(null); // ankiState: null means New or needs synthesis
+      }
       cache.index[entry[kIndices.word]] = entry;
       if (is_active(entry)) cache.active.push(entry);
     });
@@ -115,7 +120,7 @@ class Vocabulary {
   static addItem(word, list) {
     check(word, String);
     if (!cache.index[word]) {
-      const entry = [word, null, null, [], 0, 0, false];
+      const entry = [word, null, null, [], 0, 0, false, null];
       if (entry.length !== kColumns.length) throw new Error(entry);
       chunk(word).push(entry);
       cache.index[word] = entry;
@@ -165,6 +170,14 @@ class Vocabulary {
       return start <= last && last < end;
     });
   }
+  static getDueFailures(start, end, now) {
+    return new Cursor((entry) => {
+      if (!entry[kIndices.failed]) return false;
+      const last = entry[kIndices.last];
+      if (!(start <= last && last < end)) return false;
+      return (entry[kIndices.next] || 0) <= now;
+    });
+  }
   static getItemsDueBy(last, next) {
     return new Cursor((entry) => {
       if (entry[kIndices.attempts] === 0) return false;
@@ -192,13 +205,13 @@ class Vocabulary {
     const entry = cache.index[item.word];
     if (!entry || entry[kIndices.attempts] !== item.attempts) return;
 
+    const scheduling = getSchedulingResult(item, result, ts);
     entry[kIndices.last] = ts;
-    entry[kIndices.next] = ts + getNextInterval(item, result, ts);
-
-    const success = result < 3;
+    entry[kIndices.next] = scheduling.interval > 0 ? ts + scheduling.interval : ts;
     entry[kIndices.attempts] = item.attempts + 1;
-    entry[kIndices.successes] = item.successes + (success ? 1 : 0);
-    entry[kIndices.failed] = !success;
+    entry[kIndices.successes] = item.successes + (result < 3 ? 1 : 0);
+    entry[kIndices.failed] = scheduling.failed;
+    entry[kIndices.ankiState] = scheduling.ankiState;
     dirty(item.word);
   }
 }

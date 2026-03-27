@@ -17,6 +17,49 @@
 - [x] Multi-stage Dockerfile: Meteor web build → Capacitor Android build
 - [x] App loads without JS errors in headless browser test
 
+## Done (Anki integration, 2026-03)
+- [x] Vendor Anki SM-2 scheduler from ankitects/anki Rust source
+- [x] Compile to WASM (107KB), 8 Rust + 44 JS + 31 session tests pass
+- [x] Runtime patch: monkey-patch Vocabulary.updateItem via WASM adapter
+- [x] Vocabulary schema extended (7→8 cols, ankiState)
+- [x] Settings UI for Anki algorithm params (learning steps, ease, intervals)
+- [x] Version display on home screen (build date + version)
+- [x] TypeScript model layer (src/anki/, src/index.ts) compiled with esbuild
+- [x] Source-level timing.js fix: due learning cards get priority over reviews
+- [x] Session simulation test (test-unit-session.cjs, 31 cases)
+
+## TypeScript Rewrite (branch: typescript-rewrite)
+
+### Phase 1: Scaffold
+- [ ] Init Vite + Preact + TypeScript project
+- [ ] Configure vite.config.ts (outDir: www, SCSS, WASM)
+- [ ] Verify `npm run dev` serves empty app
+
+### Phase 2: Core model
+- [ ] persistence.ts — localStorage wrapper with Preact signals
+- [ ] settings.ts, lists.ts, vocabulary.ts, timing.ts
+- [ ] Port src/anki/ as-is
+
+### Phase 3: Lib layer
+- [ ] Convert lib/base.js, matcher/, animation, characters, decomposition to TS
+
+### Phase 4: Components (Preact)
+- [ ] Layout, Home, Teach (handwriting canvas), Lists, Settings, Help
+
+### Phase 5: Styles
+- [ ] Port SCSS, verify visual parity
+
+### Phase 6: Integration
+- [ ] WASM + Capacitor + Android build
+- [ ] All tests pass
+
+### Phase 7: Cleanup
+- [ ] Remove client/, .meteor/, cordova-build-override/, old www bundles
+
+## Known issues
+- [ ] ankiState localStorage write has 50ms race (setTimeout after Meteor.defer)
+- [ ] Learning card priority only works at source level, not in runtime patch
+
 ## Skipped cherry-picks
 - [ ] Wiktionary display (commit 7463b5d1) — needs etymology.wiktionary in character data
 - [ ] Remove onClick on canvas (commit 7ed3497b) — minor UX change

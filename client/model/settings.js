@@ -31,8 +31,22 @@ const defaults = {
   paper_filter: true,
   reveal_order: true,
   revisit_failures: true,
+  session_duration: 600,
   show_regrading_icon: true,
   snap_strokes: true,
+  // Anki SM-2 algorithm settings (stored as integers for UI; divided by 100)
+  learn_steps: '1 10',              // minutes, space-separated
+  relearn_steps: '10',              // minutes
+  graduating_interval_good: 1,      // days
+  graduating_interval_easy: 4,      // days
+  starting_ease: 250,               // /100 → 2.50
+  hard_multiplier: 120,             // /100 → 1.20
+  easy_multiplier: 130,             // /100 → 1.30
+  interval_multiplier: 100,         // /100 → 1.00
+  maximum_review_interval: 36500,   // days
+  lapse_multiplier: 0,              // /100 → 0.00
+  minimum_lapse_interval: 1,        // days
+  leech_threshold: 8,
 };
 
 class Settings {

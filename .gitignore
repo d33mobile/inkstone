@@ -6,5 +6,9 @@
 .electrify
 .sass-cache
 node_modules
-node_modules
-.build
+
+# Build artifacts
+android/app/build/
+rust/anki-scheduler/target/
+rust/anki-scheduler/pkg-node/
+dist/

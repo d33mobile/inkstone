@@ -109,6 +109,12 @@
           padding: 6% 0;
           min-height: 5 * $font-size / 4;
 
+          > .next-session {
+            font-size: 3 * $font-size / 4;
+            opacity: 0.6;
+            margin-top: 2%;
+          }
+
           > .option {
             background-color: $base-color;
             color: white;

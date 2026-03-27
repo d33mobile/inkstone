@@ -45,6 +45,11 @@ if (Meteor.isCordova || typeof window.Capacitor !== 'undefined') {
 Platform.isAndroid = () => false;
 Platform.isIOS = () => true;
 
+Template.index.helpers({
+  version: () => (typeof BUILD_VERSION !== 'undefined') ? BUILD_VERSION : '0.2.0',
+  buildDate: () => (typeof BUILD_DATE !== 'undefined') ? 'built ' + BUILD_DATE : '',
+});
+
 Template.layout.helpers({
   remainder: () => {
     const x = Timing.getRemainder();
