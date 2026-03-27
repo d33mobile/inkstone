@@ -175,6 +175,22 @@
           }
           localStorage.setItem(key, JSON.stringify(chunk));
         }, 50); // 50ms — well after Meteor.defer
+
+        // Schedule a shuffle when this learning card becomes due.
+        // After the timer, dirty the vocabulary to trigger reactive re-computation
+        // which causes the remainder autorun → shuffle autorun to re-fire.
+        // When a learning card becomes due, re-trigger shuffle.
+        // Use Timing.shuffle() which is safe (just re-picks next card).
+        // The old shuffle checks adds/reviews first, so this only helps
+        // when adds/reviews are exhausted. But it ensures the failure
+        // shows up as soon as the user finishes the current batch.
+        if (failed && interval > 0 && interval < 3600) {
+          setTimeout(function() {
+            try {
+              require('/client/model/timing').Timing.shuffle();
+            } catch(e) {}
+          }, (interval + 1) * 1000);
+        }
       };
 
       console.log('[anki] Vocabulary.updateItem patched with Anki SM-2 scheduler');
