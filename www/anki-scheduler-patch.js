@@ -200,6 +200,54 @@
     }
   }
 
+  // === Part 2: Fix shuffle ordering ===
+  // The old shuffle checks adds/reviews BEFORE failures. To make due learning
+  // cards preempt, we override getNewItems and getItemsDueBy to return empty
+  // cursors when a due learning card exists. This tricks shuffle into falling
+  // through to the failures branch.
+  function patchShuffleOrder() {
+    try {
+      var Vocabulary = require('/client/model/vocabulary').Vocabulary;
+      var origGetNew = Vocabulary.getNewItems.bind(Vocabulary);
+      var origGetDue = Vocabulary.getItemsDueBy.bind(Vocabulary);
+
+      function hasDueLearningCard() {
+        var now = Math.floor(Date.now() / 1000);
+        for (var i = 0; i < 16; i++) {
+          var raw = localStorage.getItem('table.vocabulary.' + i);
+          if (!raw) continue;
+          try {
+            var chunk = JSON.parse(raw);
+            for (var j = 0; j < chunk.length; j++) {
+              // [6]=failed, [2]=next, [3]=lists
+              if (chunk[j][6] && chunk[j][3] && chunk[j][3].length > 0 && (chunk[j][2] || 0) <= now) {
+                return true;
+              }
+            }
+          } catch(e) {}
+        }
+        return false;
+      }
+
+      // Empty cursor stand-in
+      var emptyCursor = { count: function() { return 0; }, next: function() { return null; }, fetch: function() { return []; } };
+
+      Vocabulary.getNewItems = function() {
+        if (hasDueLearningCard()) return emptyCursor;
+        return origGetNew();
+      };
+
+      Vocabulary.getItemsDueBy = function(last, next) {
+        if (hasDueLearningCard()) return emptyCursor;
+        return origGetDue(last, next);
+      };
+
+      console.log('[anki] Shuffle ordering patched: due learning cards preempt adds/reviews');
+    } catch(e) {
+      console.error('[anki] Failed to patch shuffle order:', e);
+    }
+  }
+
   // === Init: load WASM then patch ===
   function initAnkiScheduler() {
     fetch('/wasm/anki_scheduler_bg.wasm')
@@ -211,6 +259,7 @@
         __wbg_finalize_init(instance, module);
         console.log('[anki] WASM loaded (' + bytes.byteLength + ' bytes)');
         patchVocabulary();
+        patchShuffleOrder();
       })
       .catch(function(e) { console.error('[anki] WASM load failed:', e); });
   }
