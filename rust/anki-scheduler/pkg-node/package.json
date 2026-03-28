@@ -1,0 +1,13 @@
+{
+  "name": "anki-scheduler",
+  "description": "Anki SM-2 scheduler compiled to WASM. Vendored from ankitects/anki.",
+  "version": "0.1.0",
+  "license": "AGPL-3.0",
+  "files": [
+    "anki_scheduler_bg.wasm",
+    "anki_scheduler.js",
+    "anki_scheduler.d.ts"
+  ],
+  "main": "anki_scheduler.js",
+  "types": "anki_scheduler.d.ts"
+}

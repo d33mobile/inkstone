@@ -1,0 +1,25 @@
+stages:
+  - test
+
+test:
+  stage: test
+  image: node:22
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq chromium > /dev/null 2>&1
+    - npm ci --ignore-scripts
+    - cd rust/anki-scheduler && mkdir -p pkg-node
+    # Use pre-built WASM — Rust toolchain not available in CI
+    - cp pkg/anki_scheduler_bg.wasm pkg-node/ 2>/dev/null || true
+    - cp pkg/*.js pkg-node/ 2>/dev/null || true
+    - cd ../..
+  script:
+    - node scripts/test-wasm-scheduler.cjs
+    - node scripts/test-unit-session.cjs
+    - node scripts/test-unit-ordering.cjs
+    - node scripts/test-ordering-e2e.cjs
+    - node scripts/test-browser-e2e.cjs
+  artifacts:
+    paths:
+      - /tmp/*.png
+    when: always
+    expire_in: 1 day
