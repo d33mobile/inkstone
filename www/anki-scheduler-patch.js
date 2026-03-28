@@ -182,13 +182,40 @@
         // When a learning card becomes due, re-trigger shuffle.
         // Use Timing.shuffle() which is safe (just re-picks next card).
         // The old shuffle checks adds/reviews first, so this only helps
-        // when adds/reviews are exhausted. But it ensures the failure
-        // shows up as soon as the user finishes the current batch.
+        // When a learning card becomes due, force the Meteor reactive chain
+        // to re-evaluate. We re-write the vocabulary chunk to trigger
+        // PersistentDict's reactive dependency → remainder autorun re-fires
+        // → calls our overridden getNewItems (returns empty when due failure
+        // exists) → shuffle falls through to failures.
         if (failed && interval > 0 && interval < 3600) {
+          var _word = word;
           setTimeout(function() {
             try {
-              require('/client/model/timing').Timing.shuffle();
-            } catch(e) {}
+              var idx = Math.abs(strHash(_word)) % 16;
+              var key = 'table.vocabulary.' + idx;
+              var raw = localStorage.getItem(key);
+              if (!raw) return;
+              // Re-set the same data to trigger PersistentDict reactivity
+              var vocabDict = require('/client/model/persistence').PersistentDict;
+              // Can't access the instance, so touch localStorage + flush
+              localStorage.setItem(key, raw);
+              // Force Tracker to notice the change
+              var vocabMod = require('/client/model/vocabulary');
+              // The vocab PersistentDict watches localStorage via its cache.
+              // We need to invalidate the cache. The simplest way: call
+              // Vocabulary.clearFailed on a dummy to trigger dirty().
+              // Actually, just call Timing.shuffle() — but we need remainder
+              // to reflect the override. The override is synchronous in
+              // getNewItems/getItemsDueBy. The remainder autorun will call
+              // them when it re-runs. We need to MAKE it re-run.
+              // Trigger: modify a setting to poke Settings' reactive dep.
+              var Settings = require('/client/model/settings').Settings;
+              var dur = Settings.get('session_duration');
+              Settings.set('session_duration', dur); // no-op write triggers reactivity
+              console.log('[anki] Learning card due — triggered reactive refresh');
+            } catch(e) {
+              console.error('[anki] Timer error:', e);
+            }
           }, (interval + 1) * 1000);
         }
       };
@@ -200,51 +227,71 @@
     }
   }
 
-  // === Part 2: Fix shuffle ordering ===
-  // The old shuffle checks adds/reviews BEFORE failures. To make due learning
-  // cards preempt, we override getNewItems and getItemsDueBy to return empty
-  // cursors when a due learning card exists. This tricks shuffle into falling
-  // through to the failures branch.
-  function patchShuffleOrder() {
+  // === Part 2: Override getNextCard for Anki-style ordering ===
+  // The old shuffle checks adds/reviews BEFORE failures. We override
+  // Timing.getNextCard() to check for due learning cards first.
+  // Key: cache the card object by word to prevent Tracker.autorun re-fires.
+  function patchGetNextCard() {
     try {
-      var Vocabulary = require('/client/model/vocabulary').Vocabulary;
-      var origGetNew = Vocabulary.getNewItems.bind(Vocabulary);
-      var origGetDue = Vocabulary.getItemsDueBy.bind(Vocabulary);
+      var Timing = require('/client/model/timing').Timing;
+      var origGetNext = Timing.getNextCard;
+      var cachedDueCard = null;
+      var cachedDueWord = null;
 
-      function hasDueLearningCard() {
-        var now = Math.floor(Date.now() / 1000);
+      function findDueLearningCard(now) {
+        var best = null;
         for (var i = 0; i < 16; i++) {
           var raw = localStorage.getItem('table.vocabulary.' + i);
           if (!raw) continue;
           try {
             var chunk = JSON.parse(raw);
             for (var j = 0; j < chunk.length; j++) {
-              // [6]=failed, [2]=next, [3]=lists
-              if (chunk[j][6] && chunk[j][3] && chunk[j][3].length > 0 && (chunk[j][2] || 0) <= now) {
-                return true;
-              }
+              var e = chunk[j];
+              // [6]=failed, [2]=next, [3]=lists, [0]=word
+              if (!e[6]) continue;
+              if (!e[3] || e[3].length === 0) continue;
+              if ((e[2] || 0) > now) continue;
+              if (!best || (e[2] || 0) < (best[2] || 0)) best = e;
             }
-          } catch(e) {}
+          } catch(ex) {}
         }
-        return false;
+        if (!best) return null;
+        return {
+          word: best[0], last: best[1], next: best[2], lists: best[3],
+          attempts: best[4], successes: best[5], failed: best[6],
+          ankiState: best[7] || null,
+        };
       }
 
-      // Empty cursor stand-in
-      var emptyCursor = { count: function() { return 0; }, next: function() { return null; }, fetch: function() { return []; } };
-
-      Vocabulary.getNewItems = function() {
-        if (hasDueLearningCard()) return emptyCursor;
-        return origGetNew();
+      Timing.getNextCard = function() {
+        var orig = origGetNext.call(Timing);
+        // Don't preempt errors or failures already showing
+        if (!orig || orig.deck === 'errors' || orig.deck === 'failures') {
+          cachedDueCard = null;
+          cachedDueWord = null;
+          return orig;
+        }
+        // Check for due learning card
+        var now = Math.floor(Date.now() / 1000);
+        var due = findDueLearningCard(now);
+        if (!due) {
+          cachedDueCard = null;
+          cachedDueWord = null;
+          return orig;
+        }
+        // Reuse cached object if same word (prevents Tracker autorun re-fire)
+        if (cachedDueWord === due.word && cachedDueCard) {
+          return cachedDueCard;
+        }
+        cachedDueWord = due.word;
+        cachedDueCard = { data: due, deck: 'failures', ts: orig.ts };
+        console.log('[anki] Preempting with due learning card:', due.word);
+        return cachedDueCard;
       };
 
-      Vocabulary.getItemsDueBy = function(last, next) {
-        if (hasDueLearningCard()) return emptyCursor;
-        return origGetDue(last, next);
-      };
-
-      console.log('[anki] Shuffle ordering patched: due learning cards preempt adds/reviews');
+      console.log('[anki] getNextCard patched for learning card priority');
     } catch(e) {
-      console.error('[anki] Failed to patch shuffle order:', e);
+      console.error('[anki] Failed to patch getNextCard:', e);
     }
   }
 
@@ -259,7 +306,8 @@
         __wbg_finalize_init(instance, module);
         console.log('[anki] WASM loaded (' + bytes.byteLength + ' bytes)');
         patchVocabulary();
-        patchShuffleOrder();
+        console.log('[anki] patchVocabulary done, calling patchGetNextCard');
+        try { patchGetNextCard(); } catch(ex) { console.error('[anki] patchGetNextCard THREW:', ex); }
       })
       .catch(function(e) { console.error('[anki] WASM load failed:', e); });
   }
