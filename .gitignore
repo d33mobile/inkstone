@@ -12,3 +12,6 @@ android/app/build/
 rust/anki-scheduler/target/
 rust/anki-scheduler/pkg-node/
 dist/
+.test-bundles/
+coverage/
+.nyc_output/

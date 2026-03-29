@@ -8,6 +8,8 @@
   },
   "scripts": {
     "test": "node scripts/test-all.cjs",
+    "test:unit": "node scripts/test-all-unit.cjs",
+    "coverage": "rm -rf .nyc_output && NODE_V8_COVERAGE=.nyc_output node scripts/test-unit-adapter.cjs ; NODE_V8_COVERAGE=.nyc_output node scripts/test-unit-vocabulary.cjs ; npx c8 report --reporter=text --reporter=html --exclude 'node_modules/**' --exclude 'scripts/**' --exclude '/tmp/**' --temp-directory .nyc_output",
     "build:model": "esbuild src/index.ts --bundle --outfile=www/inkstone-model.js --format=iife --target=es2020 --external:'/client/*' --external:'meteor/*'",
     "typecheck": "tsc --project src/tsconfig.json --noEmit"
   },
@@ -32,6 +34,7 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "c8": "^11.0.0",
     "esbuild": "^0.27.4",
     "typescript": "^6.0.2"
   }

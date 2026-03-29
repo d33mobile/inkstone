@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Runs all unit and integration tests sequentially.
- * Exit code is non-zero if any test fails.
+ * Runs all Node.js unit tests (no browser required).
+ * Used by the coverage script.
  */
+'use strict';
 const { execSync } = require('child_process');
 const path = require('path');
 
 const tests = [
-  // Phase 1: Pure unit tests
   'test-unit-base.cjs',
   'test-unit-pinyin.cjs',
   'test-unit-decomposition.cjs',
@@ -15,37 +15,27 @@ const tests = [
   'test-unit-characters.cjs',
   'test-wasm-scheduler.cjs',
   'test-unit-recognizer.cjs',
-  // Phase 2: Data flow tests
   'test-study-flow.cjs',
   'test-unit-session.cjs',
   'test-unit-ordering.cjs',
   'test-unit-adapter.cjs',
   'test-unit-vocabulary.cjs',
-  // Phase 3: Browser integration tests (require puppeteer)
-  'test-session-duration.cjs',
-  'test-failed-cards.cjs',
-  'test-browser-e2e.cjs',
 ];
 
-let totalPassed = 0;
-let totalFailed = 0;
-let testsFailed = [];
+let totalPassed = 0, totalFailed = 0, testsFailed = [];
 
-console.log('=== Running all tests ===\n');
+console.log('=== Running unit tests ===\n');
 
 for (const test of tests) {
   const script = path.join(__dirname, test);
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`Running: ${test}`);
-  console.log('='.repeat(60));
+  console.log(`\n${'='.repeat(50)}\nRunning: ${test}\n${'='.repeat(50)}`);
   try {
     const output = execSync(`node "${script}"`, {
       cwd: path.join(__dirname, '..'),
       stdio: 'pipe',
-      timeout: 180000,
+      timeout: 120000,
     }).toString();
     console.log(output);
-    // Parse results from output
     const match = output.match(/(\d+) passed, (\d+) failed/);
     if (match) {
       totalPassed += parseInt(match[1]);
@@ -64,13 +54,11 @@ for (const test of tests) {
   }
 }
 
-console.log('\n' + '='.repeat(60));
-console.log('TOTAL RESULTS');
-console.log('='.repeat(60));
-console.log(`  ${totalPassed} passed, ${totalFailed} failed across ${tests.length} test files`);
+console.log('\n' + '='.repeat(50));
+console.log(`TOTAL: ${totalPassed} passed, ${totalFailed} failed`);
 if (testsFailed.length > 0) {
-  console.log(`  Failed: ${testsFailed.join(', ')}`);
+  console.log(`Failed: ${testsFailed.join(', ')}`);
   process.exitCode = 1;
 } else {
-  console.log('  All tests passed!');
+  console.log('All unit tests passed!');
 }

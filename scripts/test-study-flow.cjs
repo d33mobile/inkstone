@@ -58,7 +58,7 @@ if (firstWord) {
   for (const char of Array.from(firstWord)) {
     const codePoint = char.codePointAt(0);
     const assetNum = Math.floor(codePoint / 256);
-    const assetPath = `assets/characters_v2/${assetNum}`;
+    const assetPath = `assets/characters_v2/${assetNum}.json`;
     
     try {
       const data = readFile(assetPath);
@@ -115,7 +115,7 @@ try {
     if (checked >= 10) break;
     const assetNum = Math.floor(char.codePointAt(0) / 256);
     try {
-      const data = readFile(`assets/characters_v2/${assetNum}`);
+      const data = readFile(`assets/characters_v2/${assetNum}.json`);
       const lines = data.split('\n').filter(x => x);
       for (const line of lines) {
         const p = JSON.parse(line);
