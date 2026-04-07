@@ -264,29 +264,26 @@
       }
 
       Timing.getNextCard = function() {
-        var orig = origGetNext.call(Timing);
-        // Don't preempt errors or failures already showing
-        if (!orig || orig.deck === 'errors' || orig.deck === 'failures') {
-          cachedDueCard = null;
-          cachedDueWord = null;
-          return orig;
-        }
-        // Check for due learning card
+        // Check for due learning card FIRST — before calling origGetNext
+        // to avoid creating a reactive dependency on next_card when preempting.
         var now = Math.floor(Date.now() / 1000);
         var due = findDueLearningCard(now);
-        if (!due) {
-          cachedDueCard = null;
-          cachedDueWord = null;
-          return orig;
-        }
-        // Reuse cached object if same word (prevents Tracker autorun re-fire)
-        if (cachedDueWord === due.word && cachedDueCard) {
+        if (due) {
+          // Reuse cached object if same word (prevents Tracker autorun re-fire)
+          if (cachedDueWord === due.word && cachedDueCard) {
+            return cachedDueCard;
+          }
+          // Need session ts — read from timing PersistentVar directly
+          var timingData = JSON.parse(localStorage.getItem('table.timing.value') || '{}');
+          cachedDueWord = due.word;
+          cachedDueCard = { data: due, deck: 'failures', ts: timingData.ts || now };
+          console.log('[anki] Preempting with due learning card:', due.word);
           return cachedDueCard;
         }
-        cachedDueWord = due.word;
-        cachedDueCard = { data: due, deck: 'failures', ts: orig.ts };
-        console.log('[anki] Preempting with due learning card:', due.word);
-        return cachedDueCard;
+        // No due card — fall through to original (creates reactive dep)
+        cachedDueCard = null;
+        cachedDueWord = null;
+        return origGetNext.call(Timing);
       };
 
       console.log('[anki] getNextCard patched for learning card priority');
