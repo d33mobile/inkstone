@@ -297,24 +297,16 @@
     fetch('/wasm/anki_scheduler_bg.wasm')
       .then(function(r) { return r.arrayBuffer(); })
       .then(function(bytes) {
-        // WebView (Android 13+) disallows synchronous WebAssembly.Module()
-        // for buffers >4 KB on the main thread. Use the async API.
         var imports = __wbg_get_imports();
-        return WebAssembly.instantiate(bytes, imports).then(function(res) {
-          __wbg_finalize_init(res.instance, res.module);
-          console.log('[anki] WASM loaded (' + bytes.byteLength + ' bytes)');
-          patchVocabulary();
-          console.log('[anki] patchVocabulary done, calling patchGetNextCard');
-          try { patchGetNextCard(); } catch(ex) { console.error('[anki] patchGetNextCard THREW:', ex); }
-        });
-      })
-      .catch(function(e) {
-        console.error('[anki] WASM load failed:', e);
-        // Even if WASM fails, the getNextCard preempt wrapper is
-        // independent (it only reads localStorage); install it anyway
-        // so failures-queue cards still preempt correctly.
+        var module = new WebAssembly.Module(bytes);
+        var instance = new WebAssembly.Instance(module, imports);
+        __wbg_finalize_init(instance, module);
+        console.log('[anki] WASM loaded (' + bytes.byteLength + ' bytes)');
+        patchVocabulary();
+        console.log('[anki] patchVocabulary done, calling patchGetNextCard');
         try { patchGetNextCard(); } catch(ex) { console.error('[anki] patchGetNextCard THREW:', ex); }
-      });
+      })
+      .catch(function(e) { console.error('[anki] WASM load failed:', e); });
   }
 
   if (typeof Meteor !== 'undefined' && Meteor.startup) {
