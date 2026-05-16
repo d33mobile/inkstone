@@ -147,13 +147,20 @@ debug hook in `client/model/timing.js` that survives a Meteor rebuild.
   invalidation but does not let the test mutate scheduler state.
   - Source hook added next to `getNextCard`, bundle rebuild pending (2.2).
 
-- [ ] **2.2 Rebuild the Meteor bundle.**
+- [x] **2.2 Rebuild the Meteor bundle.**
   Stage 1 of the Dockerfile builds the bundle. Run it locally
   (`docker build --target meteor-web -t inkstone-web:dev .` or the
   equivalent) and copy the new `www/<hash>.js` over the in-tree one.
   Update `www/index.html` if Meteor renamed the file. Commit only the
   source change plus the regenerated bundle — keep the diff to those
   files only.
+  - New bundle hash: `12d1922bcad5335051514e6ce9dfebadb2f3ed33.js`
+    (was `b001ea39fb8fb87a70ce23be83c16753750f7fdc.js`). Hook present:
+    yes (`grep -c next_card_for_test` = 1). Built on d-claude runner
+    via `docker build --target meteor-build`, extracted from
+    `/tmp/project/.build/android/project/assets/www/application/`.
+    CSS hash also changed in build output but kept old CSS to limit
+    diff to bundle + index.html as instructed.
 
 - [ ] **2.3 Drop the bundle byte-patch.**
   Revert the sed-induced `t._next_card_ref = f` in the in-tree
