@@ -91,11 +91,20 @@ end-to-end ≈ 4 min on top of the build.
     sum (pipeline #29) was apk-e2e 115.5 s + apk-multicard ~90 s +
     apk-midstroke 66 s ≈ **271 s**. Net saving ~50 s.
 
-- [ ] **1.4 Pre-pull `alpine:3.20` and any docker images used by the
+- [x] **1.4 Pre-pull `alpine:3.20` and any docker images used by the
   shared `test` job onto the runner cache.**
   Less critical (the `test` job runs on GitLab SaaS), but if we ever
   move the WASM/unit tests to the self-hosted runner, having `node:22`
   and `alpine:3.20` warm shaves ~10 s per cold spawn.
+  - n/a. Audited `.gitlab-ci.yml`: only jobs tagged `android-kvm` run
+    on the self-hosted runner (`hello-android-kvm`, `build-apk`,
+    `apk-tests`), and all three use `inkstone-apk-e2e:dev-cached`,
+    which is already local (4.85 GB). The `test` job uses `node:22`
+    but has no `tags:` block, so it runs on GitLab SaaS shared
+    runners — pre-pulling on our host does nothing for it. No
+    `alpine:3.20` reference anywhere in CI. `node:22-bookworm` is
+    also already cached on the runner (1.13 GB) as a side effect of
+    the `dev-cached` image build. Marked done.
 
 - [ ] **1.5 Measure and document the new wall-time.**
   Compare pipelines pre- and post-changes. Update `docker/apk-e2e/README.md`
