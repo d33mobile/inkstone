@@ -340,6 +340,13 @@ function parseAll(vocab) {
   await ev(cdp, `Router.go('teach')`);
   await sleep(5500);
   await installErrorTrap(cdp);
+  // Wait for the patched getNextCard wrapper to install before reading
+  // currentCardChar. Otherwise the original getNextCard returns the
+  // first regular card (一) instead of the seeded lapsed 三 via preempt.
+  for (let i = 0; i < 40; i++) {
+    try { if (await ev(cdp, `!!window.__ankiSchedulerActive`)) break; } catch (e) {}
+    await sleep(250);
+  }
 
   const fullBody = await ev(cdp, `document.body.innerText`);
   log('Full body after /teach load:\n', fullBody.slice(0, 400));
