@@ -57,7 +57,7 @@ end-to-end ≈ 4 min on top of the build.
     build-apk `before_script` does `ln -sfn /srv/baked/node_modules
     node_modules`; tag bumped `:dev` → `:dev-cached`.
 
-- [ ] **1.3 Collapse the three APK e2e jobs into one.**
+- [x] **1.3 Collapse the three APK e2e jobs into one.**
   New job `apk-tests` does: one APK install, one `adb forward`, one
   socat bridge, then `node scripts/test-apk-e2e.cjs && node
   scripts/test-apk-multicard.cjs && node scripts/test-apk-midstroke-flush.cjs`.
@@ -85,6 +85,11 @@ end-to-end ≈ 4 min on top of the build.
       c) Replace `monkey` with `am start -n $PKG/.MainActivity`
          (explicit launch) and lengthen the poll window to ≥ 60 s.
     Option (a) is the safest next step — try it on the next tick.
+  - Third attempt (4c344937 → pipeline #34) **passed**. `reset_app`
+    now uses `adb uninstall && adb install -r` between scripts.
+    Wall: apk-tests **219 s** for all three sub-scripts; prior
+    sum (pipeline #29) was apk-e2e 115.5 s + apk-multicard ~90 s +
+    apk-midstroke 66 s ≈ **271 s**. Net saving ~50 s.
 
 - [ ] **1.4 Pre-pull `alpine:3.20` and any docker images used by the
   shared `test` job onto the runner cache.**
