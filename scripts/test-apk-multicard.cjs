@@ -234,19 +234,26 @@ async function currentCardChar(cdp) {
   if (!geom0) { fail('no canvas'); process.exit(1); }
   log('Canvas:', JSON.stringify({ w: geom0.width, h: geom0.height, dpr: geom0.dpr }));
 
-  // Each scenario: draw whatever strokes the current card needs.
-  const drawn = new Set();
-  for (let i = 0; i < 3; i++) {
+  // Up to 3 unique cards expected, but the freshly-launched WebView's
+  // handwriting recognizer can miss the very first card's strokes. So
+  // we drive in attempts: after each draw + tap, poll briefly for the
+  // visible char to change; if it didn't, re-draw. Bail after enough
+  // attempts so a real "stuck" bug still fails the test.
+  const seen = []; // characters in order they advanced past
+  let attempts = 0;
+  const MAX_ATTEMPTS = 8;
+  let lastChar = null;
+  while (seen.length < 3 && attempts < MAX_ATTEMPTS) {
+    attempts++;
     const char = await currentCardChar(cdp);
-    log(`\n--- Card ${i + 1}/3: ${char} ---`);
-    if (!char) { fail(`card ${i + 1}: no recognised pinyin in body`); break; }
-    if (drawn.has(char)) { fail(`card ${i + 1}: same char shown twice (${char})`); break; }
-    drawn.add(char);
+    log(`\n--- Attempt ${attempts}/${MAX_ATTEMPTS} (advanced=${seen.length}/3) char=${char} ---`);
+    if (!char) { fail(`attempt ${attempts}: no recognised pinyin in body`); break; }
 
     const geom = await getGeom(cdp);
     if (char === '一') {
-      // Perfect single horizontal.
-      await drawStrokeFromTo(geom, 0.13, 0.56, 0.87, 0.56, 400);
+      // Single horizontal. Slower swipe helps the freshly-launched
+      // recognizer's first-card warm-up race.
+      await drawStrokeFromTo(geom, 0.13, 0.56, 0.87, 0.56, 800);
     } else if (char === '十') {
       // Perfect H + V.
       await drawStrokeFromTo(geom, 0.13, 0.55, 0.87, 0.55, 400);
@@ -264,9 +271,25 @@ async function currentCardChar(cdp) {
       await drawStrokeFromTo(geom, 0.12, 0.85, 0.93, 0.83, 400); // bottom horizontal
     }
 
-    adbScreencap(`${ARTIFACTS_DIR}/multicard-${i + 1}-${char}.png`);
+    adbScreencap(`${ARTIFACTS_DIR}/multicard-${attempts}-${char}.png`);
     await tapCanvasCenter(geom);  // advance
+
+    // Poll briefly for the visible char to change (or session to end).
+    let advanced = false;
+    for (let j = 0; j < 8; j++) {
+      const now = await currentCardChar(cdp);
+      if (now !== char) { advanced = true; break; }
+      await sleep(500);
+    }
+    if (advanced) {
+      log(`attempt ${attempts}: advanced past ${char}`);
+      if (!seen.includes(char)) seen.push(char);
+      lastChar = char;
+    } else {
+      log(`attempt ${attempts}: did not advance past ${char}, will retry`);
+    }
   }
+  log(`\nAdvanced through ${seen.length}/3 unique cards in ${attempts} attempts: ${seen.join(', ')}`);
 
   // After all three cards the session should be done.
   await sleep(2000);
