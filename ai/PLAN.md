@@ -174,11 +174,12 @@ debug hook in `client/model/timing.js` that survives a Meteor rebuild.
     returns 1; no `b001ea39*` file exists in `www/`. No diff to
     commit.
 
-- [ ] **2.4 Switch the midstroke test to the source-level hook.**
+- [x] **2.4 Switch the midstroke test to the source-level hook.**
   In `scripts/test-apk-midstroke-flush.cjs`, replace
   `Timing._next_card_ref.dep.changed()` with
   `Timing._next_card_for_test().dep.changed()`. The hook-check
   assertion still reads `!!T._next_card_for_test()`.
+  - Switched to `Timing._next_card_for_test()`, verification in 2.5.
 
 - [ ] **2.5 Verify asymmetry.**
   - On `ci-anki-scheduler` (post-fix): apk-midstroke-flush-e2e

@@ -220,13 +220,14 @@ async function slowSwipe(geom, xfStart, yfStart, xfEnd, yfEnd, durMs = SLOW_STRO
 }
 
 // Slow swipe via real adb input + a parallel CDP loop that invalidates
-// Timing._next_card_ref (a bundle-patched accessor for the otherwise
-// module-private next_card ReactiveVar). On pre-fix, the getNextCard
-// wrapper reads next_card on every call so the autorun depends on it
-// — invalidation fires the autorun mid-stroke and the handwriting
-// widget is destroyed between touchmove events. On post-fix, the
-// wrapper takes the preempt path *first* without reading next_card,
-// so the autorun has no dep on it and the invalidation is harmless.
+// the module-private next_card ReactiveVar via the source-level hook
+// Timing._next_card_for_test() (added in client/model/timing.js). On
+// pre-fix, the getNextCard wrapper reads next_card on every call so the
+// autorun depends on it — invalidation fires the autorun mid-stroke and
+// the handwriting widget is destroyed between touchmove events. On
+// post-fix, the wrapper takes the preempt path *first* without reading
+// next_card, so the autorun has no dep on it and the invalidation is
+// harmless.
 async function slowSwipeWithSideChannel(cdp, geom, xfStart, yfStart, xfEnd, yfEnd, durMs, hzMs = 150) {
   const a = toDev(geom, geom.left + geom.width * xfStart, geom.top + geom.height * yfStart);
   const b = toDev(geom, geom.left + geom.width * xfEnd, geom.top + geom.height * yfEnd);
@@ -238,10 +239,13 @@ async function slowSwipeWithSideChannel(cdp, geom, xfStart, yfStart, xfEnd, yfEn
       await ev(cdp, `(() => {
         try {
           var T = require('/client/model/timing').Timing;
-          if (T && T._next_card_ref && T._next_card_ref.dep) {
-            T._next_card_ref.dep.changed();
-            if (typeof Tracker !== 'undefined') Tracker.flush();
-            return 'fired';
+          if (T && typeof T._next_card_for_test === 'function') {
+            var rv = T._next_card_for_test();
+            if (rv && rv.dep) {
+              rv.dep.changed();
+              if (typeof Tracker !== 'undefined') Tracker.flush();
+              return 'fired';
+            }
           }
         } catch(e) {}
         return 'no-hook';
@@ -360,16 +364,17 @@ function parseAll(vocab) {
   if (!strokeSet) { fail(`unsupported target char ${targetChar}`); process.exit(1); }
   log(`Drawing ${strokeSet.length} stroke(s) at ${SLOW_STROKE_MS} ms each`);
 
-  // Verify the test hook is present (bundle was patched to add
-  // Timing._next_card_ref). Without it, the side-channel below is a no-op
-  // and the test reduces to a slow-swipe smoke.
+  // Verify the test hook is present (source-level
+  // Timing._next_card_for_test() added in client/model/timing.js).
+  // Without it, the side-channel below is a no-op and the test reduces
+  // to a slow-swipe smoke.
   const hook = await ev(cdp, `(() => {
     try {
       const T = require('/client/model/timing').Timing;
-      return !!(T && T._next_card_ref && T._next_card_ref.dep);
+      return !!(T && typeof T._next_card_for_test === 'function' && T._next_card_for_test());
     } catch(e) { return false; }
   })()`);
-  if (hook) pass('Timing._next_card_ref hook available'); else fail('Timing._next_card_ref hook missing — bundle patch lost?');
+  if (hook) pass('Timing._next_card_for_test() hook available'); else fail('Timing._next_card_for_test() hook missing — bundle rebuild lost it?');
 
   for (const [a, b, c, d] of strokeSet) {
     await slowSwipeWithSideChannel(cdp, geom, a, b, c, d, SLOW_STROKE_MS);
