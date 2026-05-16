@@ -347,6 +347,23 @@ function parseAll(vocab) {
     try { if (await ev(cdp, `!!window.__ankiSchedulerActive`)) break; } catch (e) {}
     await sleep(250);
   }
+  // The teach view's getNextCard autorun fires once on initial render —
+  // BEFORE patchGetNextCard installs. The DOM is therefore stuck on
+  // whichever card the original (unwrapped) getNextCard picked (here,
+  // the first regular card 一). Force the autorun to re-fire so it
+  // picks up the just-installed preempt wrapper, which then serves the
+  // pre-seeded lapsed 三 from the failures queue.
+  try {
+    await ev(cdp, `(() => {
+      var T = require('/client/model/timing').Timing;
+      var rv = T && typeof T._next_card_for_test === 'function' && T._next_card_for_test();
+      if (rv && rv.dep) {
+        rv.dep.changed();
+        if (typeof Tracker !== 'undefined') Tracker.flush();
+      }
+    })()`);
+  } catch (e) {}
+  await sleep(800);
 
   const fullBody = await ev(cdp, `document.body.innerText`);
   log('Full body after /teach load:\n', fullBody.slice(0, 400));
