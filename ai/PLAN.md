@@ -245,12 +245,13 @@ and `apk-multicard-e2e` assertions key off.
 
 ### Tasks
 
-- [ ] **3.1 Switch the WASM load to `WebAssembly.instantiate(bytes,
+- [x] **3.1 Switch the WASM load to `WebAssembly.instantiate(bytes,
   imports)`.**
   Update `www/anki-scheduler-patch.js` `initAnkiScheduler` to await
   the async API. Also install the `getNextCard` wrapper in the
   `.catch` so failures-queue preemption keeps working even if WASM
   itself blows up.
+  - async loader re-applied; Phase 3.2/3.3 to rebaseline asserts.
 
 - [ ] **3.2 Re-baseline `apk-e2e` and `apk-multicard-e2e`
   assertions.**

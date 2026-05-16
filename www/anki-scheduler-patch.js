@@ -298,15 +298,22 @@
       .then(function(r) { return r.arrayBuffer(); })
       .then(function(bytes) {
         var imports = __wbg_get_imports();
-        var module = new WebAssembly.Module(bytes);
-        var instance = new WebAssembly.Instance(module, imports);
-        __wbg_finalize_init(instance, module);
-        console.log('[anki] WASM loaded (' + bytes.byteLength + ' bytes)');
-        patchVocabulary();
-        console.log('[anki] patchVocabulary done, calling patchGetNextCard');
-        try { patchGetNextCard(); } catch(ex) { console.error('[anki] patchGetNextCard THREW:', ex); }
+        // Async API: sync `new WebAssembly.Module(bytes)` is blocked
+        // on the main thread for buffers > 4 KB on Android 13+ WebView.
+        return WebAssembly.instantiate(bytes, imports).then(function(res) {
+          __wbg_finalize_init(res.instance, res.module);
+          console.log('[anki] WASM loaded (' + bytes.byteLength + ' bytes)');
+          patchVocabulary();
+          try { patchGetNextCard(); } catch(ex) { console.error('[anki] patchGetNextCard THREW:', ex); }
+        });
       })
-      .catch(function(e) { console.error('[anki] WASM load failed:', e); });
+      .catch(function(e) {
+        console.error('[anki] WASM load failed:', e);
+        // The getNextCard preempt wrapper is independent of the WASM
+        // binary — install it anyway so failures-queue preemption keeps
+        // working in degraded mode.
+        try { patchGetNextCard(); } catch(ex) { console.error('[anki] patchGetNextCard THREW (post-error):', ex); }
+      });
   }
 
   if (typeof Meteor !== 'undefined' && Meteor.startup) {
