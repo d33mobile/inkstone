@@ -125,3 +125,48 @@ apk-e2e:
       - artifacts/
     when: always
     expire_in: 7 days
+
+# Multi-card variant — exercises a session with more than one card. The
+# old `getNextCard` preempt-reactivity bug re-initialised the teach
+# template mid-stroke when next_card changed, and that only fires with
+# multiple cards in the same session. This test draws 一, 十, 三 with a
+# mix of perfect and wrong strokes and asserts no JS errors leaked.
+apk-multicard-e2e:
+  stage: apk-e2e
+  needs:
+    - job: build-apk
+      artifacts: true
+  tags:
+    - android-kvm
+  image: *apk_image
+  variables:
+    ANDROID_ADB_SERVER_ADDRESS: adb-host
+    ANDROID_ADB_SERVER_PORT: "5037"
+    CDP_HOST: adb-host
+    CDP_PORT: "9222"
+    PKG: me.skishore.inkstone
+    APK_PATH: android/app/build/outputs/apk/debug/app-debug.apk
+    ARTIFACTS_DIR: artifacts
+  before_script:
+    - mkdir -p "$ARTIFACTS_DIR"
+    - npm ci --ignore-scripts
+    - adb devices
+    - adb uninstall "$PKG" 2>&1 | tail -1 || true
+    - adb install -r "$APK_PATH"
+    - adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS 2>&1 || true
+    - adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null
+    - sleep 8
+    - |
+      WS=$(adb shell cat /proc/net/unix | awk '/webview_devtools_remote/{print $NF; exit}' | tr -d '\r')
+      echo "WebView socket: $WS"
+      adb forward tcp:9222 "localabstract:${WS#@}"
+      socat TCP-LISTEN:9222,bind=127.0.0.1,fork,reuseaddr TCP:"$CDP_HOST":"$CDP_PORT" &
+      sleep 1
+      curl -fs "http://localhost:9222/json" > /dev/null && echo "CDP reachable via local socat"
+  script:
+    - node scripts/test-apk-multicard.cjs
+  artifacts:
+    paths:
+      - artifacts/
+    when: always
+    expire_in: 7 days
