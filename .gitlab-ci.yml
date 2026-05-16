@@ -146,8 +146,14 @@ apk-tests:
       set -e
       reset_app() {
         echo "=== reset emulator state ==="
-        adb shell pm clear "$PKG" || true
-        # pm clear may revoke runtime permissions, so re-grant.
+        # `pm clear` proved unreliable — after it, monkey's relaunch
+        # left only WebViewZygoteInit in /proc/net/unix and the
+        # real webview_devtools_remote_* socket never appeared. Fall
+        # back to the same uninstall/install flow that the per-job
+        # before_script used to do; ~10 s slower per reset than `pm
+        # clear` but actually works.
+        adb uninstall "$PKG" 2>&1 | tail -1 || true
+        adb install -r "$APK_PATH"
         adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS 2>&1 || true
         adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null
         # Poll up to ~30 s for the new WebView devtools abstract socket to
