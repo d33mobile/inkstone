@@ -295,8 +295,8 @@ function parseEntry(raw) {
         assertEq(e.attempts, 1, 'C.attempts');
         assertEq(e.successes, 0, 'C.successes (lapse → no success counted)');
         assertEq(e.failed, true, 'C.failed (lapse marker)');
-        if (e.interval === 0) pass(`C.interval=0s (lapse: next==last)`);
-        else fail(`C.interval=${e.interval}s (expected 0 for lapse)`);
+        if (e.interval <= 600 && e.failed === true) pass(`C.interval=${e.interval}s (lapse: legacy 0 or Anki relearn step ≤600s)`);
+        else fail(`C.interval=${e.interval}s, failed=${e.failed} (expected interval ∈ [0,600] && failed===true)`);
       }
       cdp.close();
     }

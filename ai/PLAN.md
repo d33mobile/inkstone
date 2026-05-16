@@ -272,10 +272,14 @@ and `apk-multicard-e2e` assertions key off.
     intervals (60s/600s, post-3.1) and the legacy fallback (~7 d).
     Lapse assertions (C / 三) untouched — that's 3.3.
 
-- [ ] **3.3 Update `apk-multicard-e2e` lapse assertion.**
+- [x] **3.3 Update `apk-multicard-e2e` lapse assertion.**
   `三.interval=0` was the legacy fallback; Anki re-learning steps
   give `interval=60s` on the first wrong stroke. Change to
   `interval <= 60 && failed === true`.
+  - Done: both lapse asserts (test-apk-e2e.cjs scenario C and
+    test-apk-multicard.cjs 三) now accept `interval ∈ [0, 600]` and
+    still require `failed === true`. Upper bound is 600s (not 60s)
+    so the second relearn step doesn't break the test.
 
 - [ ] **3.4 Confirm green on both branches + complete 2.5 cleanup.**
   - `ci-anki-scheduler`: every job ✓ including midstroke.

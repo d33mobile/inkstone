@@ -285,13 +285,15 @@ async function currentCardChar(cdp) {
     if (vocab[c].interval > 0) pass(`${c}.interval=${vocab[c].interval}s (>0; Anki learning step or legacy fallback)`);
     else fail(`${c}.interval=${vocab[c].interval}s (expected >0)`);
   }
-  // 三: 3 wrong strokes triggered the penalty → lapse expected
-  // (interval==0, failed=true, successes=0) regardless of whether the
-  // recogniser later accepted the correct strokes.
+  // 三: 3 wrong strokes triggered the penalty → lapse expected.
+  // Pre-Anki the legacy scheduler returned interval=0 (next==last); with
+  // Anki SM-2 the lapse maps to a Relearning state whose first step is
+  // 60s and second is up to 600s. failed===true is unchanged either way.
   if (vocab['三']) {
     assertEq(vocab['三'].failed, true, '三.failed (penalty triggered)');
     assertEq(vocab['三'].successes, 0, '三.successes (lapse → no success)');
-    assertEq(vocab['三'].interval, 0, '三.interval (lapse: next==last)');
+    if (vocab['三'].interval <= 600 && vocab['三'].failed === true) pass(`三.interval=${vocab['三'].interval}s (lapse: legacy 0 or Anki relearn step ≤600s)`);
+    else fail(`三.interval=${vocab['三'].interval}s, failed=${vocab['三'].failed} (expected interval ∈ [0,600] && failed===true)`);
   }
 
   // The mid-stroke / template-reinit bug from `getNextCard` preempt
