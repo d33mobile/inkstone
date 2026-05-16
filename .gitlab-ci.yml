@@ -150,12 +150,42 @@ apk-tests:
         # pm clear may revoke runtime permissions, so re-grant.
         adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS 2>&1 || true
         adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null
-        sleep 6
-        NEW_WS=$(adb shell cat /proc/net/unix | awk '/webview_devtools_remote/{print $NF; exit}' | tr -d '\r')
-        echo "WebView socket (post-reset): $NEW_WS"
+        # Poll up to ~30 s for the new WebView devtools abstract socket to
+        # show up in /proc/net/unix. After `pm clear` the renderer pid (and
+        # therefore the socket name) changes, so we can't reuse the old one.
+        NEW_WS=""
+        for i in $(seq 1 30); do
+          NEW_WS=$(adb shell cat /proc/net/unix | awk '/webview_devtools_remote/{print $NF; exit}' | tr -d '\r')
+          if [ -n "$NEW_WS" ]; then
+            echo "WebView socket (post-reset, after ${i}s): $NEW_WS"
+            break
+          fi
+          sleep 1
+        done
+        if [ -z "$NEW_WS" ]; then
+          echo "ERROR: WebView devtools socket did not appear within 30 s after pm clear" >&2
+          adb shell cat /proc/net/unix >&2 || true
+          exit 1
+        fi
         adb forward --remove-all
         adb forward tcp:9222 "localabstract:${NEW_WS#@}"
-        sleep 1
+        # Poll up to ~15 s for the CDP /json endpoint to start responding
+        # through the existing socat bridge. The bridge itself is left
+        # running from before_script — only `adb forward` rebinds here.
+        CDP_OK=""
+        for i in $(seq 1 30); do
+          if curl -fs "http://localhost:9222/json" > /dev/null 2>&1; then
+            echo "CDP reachable via local socat (after $((i*5))00ms)"
+            CDP_OK=1
+            break
+          fi
+          sleep 0.5
+        done
+        if [ -z "$CDP_OK" ]; then
+          echo "ERROR: CDP /json did not respond within 15 s after adb forward" >&2
+          curl -v "http://localhost:9222/json" >&2 || true
+          exit 1
+        fi
       }
       echo "--- apk-e2e ---"
       node scripts/test-apk-e2e.cjs
