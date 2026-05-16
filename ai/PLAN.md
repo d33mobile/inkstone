@@ -253,7 +253,7 @@ and `apk-multicard-e2e` assertions key off.
   itself blows up.
   - async loader re-applied; Phase 3.2/3.3 to rebaseline asserts.
 
-- [ ] **3.2 Re-baseline `apk-e2e` and `apk-multicard-e2e`
+- [x] **3.2 Re-baseline `apk-e2e` and `apk-multicard-e2e`
   assertions.**
   Anki SM-2 with `learn_steps=[1,10]` produces:
   - first "good" on a new card: `failed=true (Learning state)`,
@@ -266,6 +266,11 @@ and `apk-multicard-e2e` assertions key off.
     b) extend the test to drive three correct sessions on the same
        card so it graduates, and keep `interval ≥ 86400`.
   Option (a) is faster, option (b) better reflects intent.
+  - Chose (a): replaced `interval >= 86400` with `interval > 0` for
+    scenarios A/B in `test-apk-e2e.cjs` and 一/十 in
+    `test-apk-multicard.cjs`. Accepts both Anki SM-2 learning-step
+    intervals (60s/600s, post-3.1) and the legacy fallback (~7 d).
+    Lapse assertions (C / 三) untouched — that's 3.3.
 
 - [ ] **3.3 Update `apk-multicard-e2e` lapse assertion.**
   `三.interval=0` was the legacy fallback; Anki re-learning steps

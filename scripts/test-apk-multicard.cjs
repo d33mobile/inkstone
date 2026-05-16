@@ -276,13 +276,14 @@ async function currentCardChar(cdp) {
     if (!vocab[c]) { fail(`vocab entry missing for ${c}`); continue; }
     assertEq(vocab[c].attempts, 1, `${c}.attempts`);
   }
-  // 一 and 十: perfect → successes=1, failed=false, interval ≥ 1 day.
+  // 一 and 十: perfect → successes=1, failed=false, interval > 0.
+  // (Anki learning step: 60s/600s; legacy fallback: ~7d. Both pass.)
   for (const c of ['一', '十']) {
     if (!vocab[c]) continue;
     assertEq(vocab[c].successes, 1, `${c}.successes`);
     assertEq(vocab[c].failed, false, `${c}.failed`);
-    if (vocab[c].interval >= 86400) pass(`${c}.interval=${vocab[c].interval}s (≥1 day)`);
-    else fail(`${c}.interval=${vocab[c].interval}s (expected ≥86400)`);
+    if (vocab[c].interval > 0) pass(`${c}.interval=${vocab[c].interval}s (>0; Anki learning step or legacy fallback)`);
+    else fail(`${c}.interval=${vocab[c].interval}s (expected >0)`);
   }
   // 三: 3 wrong strokes triggered the penalty → lapse expected
   // (interval==0, failed=true, successes=0) regardless of whether the

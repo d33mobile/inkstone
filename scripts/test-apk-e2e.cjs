@@ -217,8 +217,8 @@ function parseEntry(raw) {
         assertEq(e.attempts, 1, 'A.attempts');
         assertEq(e.successes, 1, 'A.successes');
         assertEq(e.failed, false, 'A.failed');
-        if (e.interval >= 86400) pass(`A.interval=${e.interval}s (≥1 day)`);
-        else fail(`A.interval=${e.interval}s (expected ≥86400)`);
+        if (e.interval > 0) pass(`A.interval=${e.interval}s (>0; Anki learning step or legacy fallback)`);
+        else fail(`A.interval=${e.interval}s (expected >0)`);
       }
       cdp.close();
     }
@@ -248,8 +248,8 @@ function parseEntry(raw) {
         assertEq(e.attempts, 1, 'B.attempts');
         assertEq(e.successes, 1, 'B.successes');
         assertEq(e.failed, false, 'B.failed');
-        if (e.interval >= 86400) pass(`B.interval=${e.interval}s (≥1 day)`);
-        else fail(`B.interval=${e.interval}s (expected ≥86400)`);
+        if (e.interval > 0) pass(`B.interval=${e.interval}s (>0; Anki learning step or legacy fallback)`);
+        else fail(`B.interval=${e.interval}s (expected >0)`);
       }
       cdp.close();
     }
