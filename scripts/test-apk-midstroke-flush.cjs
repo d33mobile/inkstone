@@ -300,25 +300,46 @@ function parseAll(vocab) {
     { key: 'san1test', name: 'San1 Test' },
   ]);
 
-  // Pre-seed 三 directly as a lapsed card so getNextCard immediately
-  // sees something in the failures deck and exercises the preempt
-  // path. This sidesteps the brittle "draw three wrong then three
-  // right" lapse routine which only worked for some characters.
+  // Pre-seed 三 as a lapsed card so getNextCard sees something in the
+  // failures deck and exercises the preempt path. Going through
+  // Vocabulary.updateItem (not a raw localStorage write) keeps the
+  // in-memory cache.index in sync with the persisted entry — a raw
+  // write left cache.index.三.attempts=0 while localStorage had
+  // attempts=1, so the next legitimate updateItem call would
+  // early-return on the (entry.attempts !== item.attempts) check and
+  // the deferred dirty() flush would clobber the seed back to
+  // attempts:0.
   const seedRes = await ev(cdp, `(() => {
-    const keys = Object.keys(localStorage).filter(k => k.startsWith('table.vocabulary.'));
-    for (const k of keys) {
-      const arr = JSON.parse(localStorage.getItem(k));
-      if (arr && arr[0] && arr[0][0] === '三') {
-        const now = Math.floor(Date.now() / 1000) - 10;
-        arr[0] = ['三', now, now, ['san1test'], 1, 0, true, null];
-        localStorage.setItem(k, JSON.stringify(arr));
-        return { key: k, entry: arr[0] };
+    try {
+      const V = require('/client/model/vocabulary').Vocabulary;
+      const ts = Math.floor(Date.now() / 1000) - 10;
+      // result=3 ('again') marks the card as lapsed: failed=true,
+      // attempts:0→1, successes unchanged at 0.
+      V.updateItem({ word: '三', attempts: 0, successes: 0,
+                     failed: false, last: null, next: null,
+                     lists: ['san1test'], ankiState: null }, 3, ts);
+      // Force the deferred PersistentDict flush so the failures queue
+      // entry is visible to findDueLearningCard() (which reads
+      // localStorage directly, not the in-memory cache).
+      if (typeof Tracker !== 'undefined') Tracker.flush();
+      // Confirm by reading back from localStorage.
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('table.vocabulary.'));
+      for (const k of keys) {
+        const arr = JSON.parse(localStorage.getItem(k));
+        if (arr && arr[0] && arr[0][0] === '三') {
+          return { key: k, entry: arr[0] };
+        }
       }
-    }
-    return null;
+      return null;
+    } catch(e) { return { error: e.message || String(e) }; }
   })()`);
   if (!seedRes) { fail('could not pre-seed lapsed 三 (san1test vocab not registered?)'); process.exit(1); }
-  pass(`pre-seeded 三 as lapsed (key=${seedRes.key})`);
+  if (seedRes.error) { fail(`pre-seed threw: ${seedRes.error}`); process.exit(1); }
+  // Verify the seed actually marked it as failed=true / attempts=1.
+  if (!seedRes.entry || seedRes.entry[6] !== true || seedRes.entry[4] < 1) {
+    fail(`pre-seed didn't take: ${JSON.stringify(seedRes.entry)}`); process.exit(1);
+  }
+  pass(`pre-seeded 三 as lapsed (key=${seedRes.key}, attempts=${seedRes.entry[4]}, failed=${seedRes.entry[6]})`);
 
   const diag = await ev(cdp, `(() => {
     const now = Math.floor(Date.now() / 1000);
