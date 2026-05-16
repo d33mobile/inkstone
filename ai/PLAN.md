@@ -64,6 +64,16 @@ end-to-end ≈ 4 min on top of the build.
   Between scripts, reset emulator state with `adb shell pm clear "$PKG"
   || adb uninstall && adb install`. Single artifact dir. Removes ~60 s
   of duplicated setup across the three jobs.
+  - [!] First attempt (b348c53a → pipeline #31) failed: after the
+    in-script `reset_app` (pm clear → monkey relaunch → fixed
+    `sleep 6` → `adb forward` → `sleep 1`), the second script
+    (`test-apk-multicard.cjs`) immediately hit `curl devtools list
+    failed` on its first `getCDP()`. The new WebView devtools
+    socket isn't actually ready when the fixed sleep ends. Next
+    attempt: replace the post-reset fixed sleeps with a poll loop
+    (curl `/json` up to ~30 s before bailing), or split the collapse
+    in two — keep midstroke (allow_failure) separate from
+    e2e+multicard. Both options on the table for the next tick.
 
 - [ ] **1.4 Pre-pull `alpine:3.20` and any docker images used by the
   shared `test` job onto the runner cache.**
