@@ -290,6 +290,42 @@ and `apk-multicard-e2e` assertions key off.
     propagates and fails the `apk-tests` job. (Deferred from 2.5
     once 3.2 + 3.3 unblock the apk-e2e / apk-multicard sub-scripts
     on POST.)
+  - [!] Tick result (pipelines #53 PRE / #54 POST, both terminal).
+    Cherry-picks landed cleanly: regress now carries Phase 3
+    commits e1619acd (3.1), 4a0b150a (3.2), 3ba0b75a (3.3). Guard
+    drop landed on POST as 4b4a4971 + comment scrub 22dc337f; on
+    PRE the semantic-equivalent `allow_failure: true` was removed
+    from `apk-midstroke-flush-e2e` as 48c45f21.
+    - **PRE (#53)**: apk-e2e FAILED 1m59s, apk-midstroke-flush-e2e
+      FAILED 1m12s (regression signal, exactly as designed —
+      `PASS: Timing._next_card_for_test() hook available`,
+      `FAIL: 十.attempts: got 0, want 1`), apk-multicard-e2e
+      FAILED 1m26s. Three reds where the doc only expected one;
+      acceptable because apk-e2e/multicard on PRE were collateral
+      reds against the rebuilt bundle from task 2.2 — see POST
+      below for the same failure mode.
+    - **POST (#54) apk-tests**: FAILED 1m55s at the first sub-script
+      (`apk-e2e`). 10 passed, 9 failed. Trace shows every vocab
+      entry is `{attempts:0, successes:0, ankiState:null,
+      interval:0}` — i.e. the scheduler completion path never ran,
+      so neither Phase-3 assertion (interval > 0) nor the
+      Phase-3.3 lapse assertion (interval ∈ [0,600] && failed) is
+      satisfied. `ankiState: null` means the WASM scheduler never
+      wrote to the vocab record at all. The Phase 2 rebuilt
+      bundle (12d1922bcad5…) appears to break the
+      `recordCompletion` / `patchVocabulary` path on the
+      emulator's WebView regardless of which scheduler runs. The
+      `attempts: 0` (legacy counter) on the post-fix branch is
+      especially telling — even the inkren fallback isn't
+      incrementing.
+    - **Outcome (b)**: 3.4 stays `[ ]`. Next tick decides — likely
+      needs (i) screenshot/console diff between the old bundle
+      `b001ea39…` and new `12d1922b…` against a fresh WebView, or
+      (ii) revert task 2.2's bundle and reintroduce the
+      source-level hook via a smaller targeted patch. Out of
+      scope for this tick per "Don't loop a third time" rule.
+    - Pipelines: POST #2529987028, PRE #2529986690. SHAs:
+      POST 22dc337f, PRE 48c45f21.
 
 ### Phase 3 exit criterion
 Two consecutive green pipelines on `ci-anki-scheduler`. The midstroke
