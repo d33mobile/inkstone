@@ -134,7 +134,7 @@ debug hook in `client/model/timing.js` that survives a Meteor rebuild.
 
 ### Tasks
 
-- [ ] **2.1 Add the hook to `client/model/timing.js`.**
+- [x] **2.1 Add the hook to `client/model/timing.js`.**
   Inside the `Timing` class:
   ```js
   // For deterministic CI regression of the getNextCard preempt-
@@ -145,6 +145,7 @@ debug hook in `client/model/timing.js` that survives a Meteor rebuild.
   ```
   Note in a comment that the hook is read-only — exposing dep allows
   invalidation but does not let the test mutate scheduler state.
+  - Source hook added next to `getNextCard`, bundle rebuild pending (2.2).
 
 - [ ] **2.2 Rebuild the Meteor bundle.**
   Stage 1 of the Dockerfile builds the bundle. Run it locally
