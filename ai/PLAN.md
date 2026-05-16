@@ -28,13 +28,18 @@ end-to-end ≈ 4 min on top of the build.
 
 ### Tasks
 
-- [ ] **1.1 Mount gradle + npm caches as docker runner volumes.**
+- [x] **1.1 Mount gradle + npm caches as docker runner volumes.**
   Edit `/etc/gitlab-runner/config.toml` on the runner host: add
   `volumes = ["/cache", "gradle-cache:/root/.gradle", "npm-cache:/root/.npm"]`
   and reload. Verify a second build is markedly faster (target build-apk
   ≤ 60 s on warm cache). Commit a note in `docker/apk-e2e/README.md`
   explaining the volume contract — don't commit `config.toml`, it lives
   on the runner.
+  - Wall-time: build-apk **170 s** cold (pipeline #26 seeded the
+    fresh volumes) → **83 s** warm (pipeline #27). ~2× speedup, but
+    short of the 60 s target — gradle still does ~30 s of project
+    configuration + kotlin/dex work that the volume cache doesn't
+    help with. Volumes are 867 MB gradle + 39 MB npm on disk.
 
 - [ ] **1.2 Bake `node_modules` into the `inkstone-apk-e2e:dev` image.**
   Add a `COPY package.json package-lock.json /app/` then `npm ci
