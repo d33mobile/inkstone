@@ -68,12 +68,23 @@ end-to-end ≈ 4 min on top of the build.
     in-script `reset_app` (pm clear → monkey relaunch → fixed
     `sleep 6` → `adb forward` → `sleep 1`), the second script
     (`test-apk-multicard.cjs`) immediately hit `curl devtools list
-    failed` on its first `getCDP()`. The new WebView devtools
-    socket isn't actually ready when the fixed sleep ends. Next
-    attempt: replace the post-reset fixed sleeps with a poll loop
-    (curl `/json` up to ~30 s before bailing), or split the collapse
-    in two — keep midstroke (allow_failure) separate from
-    e2e+multicard. Both options on the table for the next tick.
+    failed` on its first `getCDP()`.
+  - [!] Second attempt (db6e90f1 → pipeline #33) added 30 s polling
+    for the new devtools socket: still failed. /proc/net/unix dump
+    at timeout contained only `@com.android.internal.os.WebViewZygoteInit/...`
+    and no `webview_devtools_remote_*`. So `pm clear` + `monkey
+    LAUNCHER` doesn't reliably bring up the WebView's devtools
+    socket within 30 s — possibly `monkey` isn't launching the app
+    (permissions revoked + notification dialog?) or Capacitor's
+    WebView init is much slower after `pm clear`. Next attempt
+    options:
+      a) Skip `pm clear` and use `adb uninstall && adb install -r` between
+         scripts — slower but the start-up is the same path that
+         worked in the original three jobs.
+      b) Revert the collapse and keep the three jobs separate.
+      c) Replace `monkey` with `am start -n $PKG/.MainActivity`
+         (explicit launch) and lengthen the poll window to ≥ 60 s.
+    Option (a) is the safest next step — try it on the next tick.
 
 - [ ] **1.4 Pre-pull `alpine:3.20` and any docker images used by the
   shared `test` job onto the runner cache.**
