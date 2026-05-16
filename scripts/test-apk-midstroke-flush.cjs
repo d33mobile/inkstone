@@ -309,20 +309,30 @@ function parseAll(vocab) {
   // early-return on the (entry.attempts !== item.attempts) check and
   // the deferred dirty() flush would clobber the seed back to
   // attempts:0.
-  const seedRes = await ev(cdp, `(() => {
+  // Trigger the seed via Vocabulary.updateItem (in-memory cache update +
+  // deferred localStorage flush). Then poll for the flush to land in
+  // localStorage — Meteor's dirty() uses a deferred write which our
+  // synchronous read inside the same IIFE would miss.
+  await ev(cdp, `(() => {
     try {
       const V = require('/client/model/vocabulary').Vocabulary;
       const ts = Math.floor(Date.now() / 1000) - 10;
       // result=3 ('again') marks the card as lapsed: failed=true,
-      // attempts:0→1, successes unchanged at 0.
+      // attempts:0→1, successes unchanged at 0. The patched
+      // updateItem delegates to origUpdateItem when wasm is undefined,
+      // so this works pre- and post-WASM-load equally.
       V.updateItem({ word: '三', attempts: 0, successes: 0,
                      failed: false, last: null, next: null,
                      lists: ['san1test'], ankiState: null }, 3, ts);
-      // Force the deferred PersistentDict flush so the failures queue
-      // entry is visible to findDueLearningCard() (which reads
-      // localStorage directly, not the in-memory cache).
       if (typeof Tracker !== 'undefined') Tracker.flush();
-      // Confirm by reading back from localStorage.
+      return 'ok';
+    } catch(e) { return 'error: ' + (e.message || String(e)); }
+  })()`);
+  // Wait for the deferred PersistentDict flush to land in localStorage.
+  let seedRes = null;
+  for (let i = 0; i < 30; i++) {
+    await sleep(200);
+    seedRes = await ev(cdp, `(() => {
       const keys = Object.keys(localStorage).filter(k => k.startsWith('table.vocabulary.'));
       for (const k of keys) {
         const arr = JSON.parse(localStorage.getItem(k));
@@ -331,13 +341,12 @@ function parseAll(vocab) {
         }
       }
       return null;
-    } catch(e) { return { error: e.message || String(e) }; }
-  })()`);
-  if (!seedRes) { fail('could not pre-seed lapsed 三 (san1test vocab not registered?)'); process.exit(1); }
-  if (seedRes.error) { fail(`pre-seed threw: ${seedRes.error}`); process.exit(1); }
-  // Verify the seed actually marked it as failed=true / attempts=1.
+    })()`);
+    if (seedRes && seedRes.entry && seedRes.entry[6] === true && seedRes.entry[4] >= 1) break;
+  }
+  if (!seedRes) { fail('could not find 三 entry in localStorage after seed'); process.exit(1); }
   if (!seedRes.entry || seedRes.entry[6] !== true || seedRes.entry[4] < 1) {
-    fail(`pre-seed didn't take: ${JSON.stringify(seedRes.entry)}`); process.exit(1);
+    fail(`pre-seed didn't take after 6s wait: ${JSON.stringify(seedRes.entry)}`); process.exit(1);
   }
   pass(`pre-seeded 三 as lapsed (key=${seedRes.key}, attempts=${seedRes.entry[4]}, failed=${seedRes.entry[6]})`);
 
