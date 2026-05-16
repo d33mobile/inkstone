@@ -95,11 +95,11 @@ build-apk:
 #  - test-apk-e2e.cjs        — single-card session, 一 then 十.
 #  - test-apk-multicard.cjs  — multi-card 一/十/三 (preempt path).
 #  - test-apk-midstroke-flush.cjs — getNextCard reactivity regression
-#    smoke; flaky enough that the original job used allow_failure:true.
-#    We run it last with `|| true` and surface a tally; the job still
-#    passes if the first two scripts pass and midstroke fails — this
-#    preserves the old per-job `allow_failure` semantics at script
-#    granularity.
+#    smoke. With Phase 2 (source-level _next_card_for_test hook) +
+#    Phase 3 (WASM async load + assertion rebaseline) landed, this
+#    must PASS on ci-anki-scheduler and FAIL on regress-pre-anki-fix
+#    (the latter still has the reactive bug). `set -e` propagates any
+#    failure; allow_failure is no longer used.
 apk-tests:
   stage: apk-e2e
   needs:
@@ -199,12 +199,8 @@ apk-tests:
       echo "--- apk-multicard ---"
       node scripts/test-apk-multicard.cjs
       reset_app
-      echo "--- apk-midstroke-flush (allow_failure) ---"
-      if node scripts/test-apk-midstroke-flush.cjs; then
-        echo "MIDSTROKE_RESULT=pass"
-      else
-        echo "MIDSTROKE_RESULT=fail (allowed; matches old allow_failure:true)"
-      fi
+      echo "--- apk-midstroke-flush ---"
+      node scripts/test-apk-midstroke-flush.cjs
   artifacts:
     paths:
       - artifacts/
