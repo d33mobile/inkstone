@@ -162,10 +162,17 @@ debug hook in `client/model/timing.js` that survives a Meteor rebuild.
     CSS hash also changed in build output but kept old CSS to limit
     diff to bundle + index.html as instructed.
 
-- [ ] **2.3 Drop the bundle byte-patch.**
+- [x] **2.3 Drop the bundle byte-patch.**
   Revert the sed-induced `t._next_card_ref = f` in the in-tree
   bundle file. The new hook from 2.2 is reached as
   `require('/client/model/timing').Timing._next_card_for_test()`.
+  - Auto-resolved by 2.2: the rebuild deleted the old
+    `b001ea39…js` (where the sed patch lived) and replaced it
+    with `12d1922b…js` (which carries `_next_card_for_test` from
+    the source edit instead). Verified: `grep _next_card_ref=f`
+    on the new bundle returns 0; `grep next_card_for_test`
+    returns 1; no `b001ea39*` file exists in `www/`. No diff to
+    commit.
 
 - [ ] **2.4 Switch the midstroke test to the source-level hook.**
   In `scripts/test-apk-midstroke-flush.cjs`, replace
