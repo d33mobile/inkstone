@@ -189,6 +189,40 @@ debug hook in `client/model/timing.js` that survives a Meteor rebuild.
     must FAIL with `十.successes=0` / `attempts=0` (the dep
     invalidation fires the autorun mid-stroke).
   - Once both confirmed, drop `allow_failure: true` from the job.
+  - [!] Pipeline #44 (`ci-anki-scheduler`, sha 9b100b52) and
+    #45 (`regress-pre-anki-fix`, sha 30bd8963 — Phase 2 commits
+    01464b9a/1138c1b4/9b100b52 cherry-picked here this tick, ai/PLAN.md
+    skipped per task instructions). Cherry-picks clean apart from
+    branch-local PLAN.md conflict resolved by `git rm`.
+    - **POST (#44) apk-tests**: FAILED at the apk-e2e sub-script
+      (`set -e` propagates non-zero exit), so the wrapper never
+      reached `--- apk-midstroke-flush ---`. The apk-e2e sub-script
+      now sees Anki SM-2 Learning-state outputs (e.g.
+      `A entry … "ankiState":{"Learning":{remaining_steps:1,
+      scheduled_secs:600}}, "interval":600, "failed":true`)
+      against legacy assertions expecting `interval ≥ 86400` /
+      `failed:false` → 14 passed, 5 failed. This is exactly the
+      Phase 3.2 / 3.3 re-baseline work; the rebuilt bundle from
+      task 2.2 made WASM Anki actually run on the emulator, which
+      blew up the legacy expectations. So POST's midstroke
+      datapoint is **unobserved this tick**.
+    - **PRE (#45) apk-midstroke-flush-e2e**: FAILED (68 s) with
+      the expected signature — `PASS: Timing._next_card_for_test()
+      hook available` then `FAIL: 一.attempts: got 0, want 1` /
+      `FAIL: 一.successes: got 0, want 1` (4 passed, 3 failed).
+      Note the failing card is **一** (the first slow-drawn card),
+      not 十 as the PLAN bullet says — but the failure mode
+      matches: the mid-stroke dep invalidation fires the autorun
+      and the recorded stroke is lost. PRE's separate
+      `apk-midstroke-flush-e2e` job (still allow_failure: true)
+      runs independently of apk-e2e so it surfaces the regression
+      signal even though apk-e2e itself also fails the Phase-3
+      assertions.
+    - Net: asymmetry is **half-confirmed** — PRE shows the regression,
+      POST blocked by Phase 3 dependency. Cannot drop
+      `allow_failure` on POST until Phase 3 is done (otherwise the
+      apk-tests job already fails on apk-e2e before midstroke runs).
+      Leave 2.5 `[ ]`; revisit after 3.2/3.3.
 
 ### Phase 2 exit criterion
 Midstroke job is GREEN on `ci-anki-scheduler` and RED on
