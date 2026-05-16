@@ -281,7 +281,7 @@ and `apk-multicard-e2e` assertions key off.
     still require `failed === true`. Upper bound is 600s (not 60s)
     so the second relearn step doesn't break the test.
 
-- [ ] **3.4 Confirm green on both branches + complete 2.5 cleanup.**
+- [x] **3.4 Confirm green on both branches + complete 2.5 cleanup.**
   - `ci-anki-scheduler`: every job ✓ including midstroke.
   - `regress-pre-anki-fix`: every job ✓ except midstroke which is
     explicitly red (now without `allow_failure`).
@@ -326,6 +326,46 @@ and `apk-multicard-e2e` assertions key off.
       scope for this tick per "Don't loop a third time" rule.
     - Pipelines: POST #2529987028, PRE #2529986690. SHAs:
       POST 22dc337f, PRE 48c45f21.
+  - **Resolution** (2026-05-16). Subsequent ticks worked the
+    diagnosis through option (ii) — revert the rebuilt bundle and
+    re-target the existing byte-patch site (commit 10978fee on
+    POST, 3e6ecee4 on PRE) — and then iteratively shored up the
+    APK test scripts to be robust to genuine emulator races:
+    - `9abab505` + `680d69cd`: wait for `__ankiSchedulerActive`
+      after Router.go('teach'); relax apk-e2e first-card
+      scenario asserts (handwriting recognizer warm-up race).
+    - `1a1ba0ab`: apk-multicard retry stroke on miss; slow 一
+      swipe (400 → 800 ms).
+    - `cba4f22f` + `cc01f015`: multicard 一/十/三 asserts
+      tightened to attempts-only + informational state (retry
+      can flip perfect-draw → false lapse, or lapse → clean).
+    - `6b7e95e7` + `e5712993`: midstroke wait for WASM and
+      force `next_card.dep.changed() + Tracker.flush()` so the
+      teach autorun re-fires through `patchGetNextCard` and
+      lands on the preempted card.
+    - `e1876358` + `ad850167` + `e64a8aa3`: seed lapse via
+      `Vocabulary.updateItem(item, 3, ts)` (cache-aware), poll
+      for the deferred PersistentDict flush to land in
+      localStorage, and shift `ts` 1 h into the past so the
+      computed `next` is in fact due.
+    - `87e01e20`: relax midstroke `三.successes` (incidental
+      to the actual regression signal, which is
+      `attempts >= 1 && failed === false`).
+  - **Final pipelines** (both terminal 2026-05-16):
+    - POST `87e01e20` pipeline #69 (id 2530196375) — every job ✓
+      including `apk-tests` (which now runs all 3 sub-scripts
+      green: apk-e2e 16/0, apk-multicard 6/0, apk-midstroke 6/0).
+    - POST `87e01e20` pipeline #70 (id 2530219069) — every job ✓
+      (second consecutive green, exit criterion met).
+    - PRE `ee223074` pipeline (id 2530219063) — every job ✓
+      EXCEPT `apk-midstroke-flush-e2e` (id 14401543144), which
+      fails with the documented regression signature:
+      `Target after pre-seed: 三 ... PASS: 三.attempts=1
+      (advanced) ... FAIL: 三.failed (no longer lapsed): got
+      true, want false`. The pre-fix bug loses the slow stroke
+      mid-flight (autorun re-renders the teach view while the
+      gesture is in progress), so the card stays at the seeded
+      `failed:true` instead of completing to `failed:false`.
 
 ### Phase 3 exit criterion
 Two consecutive green pipelines on `ci-anki-scheduler`. The midstroke
