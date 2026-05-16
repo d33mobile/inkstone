@@ -1,0 +1,187 @@
+# Inkstone CI / test improvements plan
+
+Three phases, executed bottom-up. Each box is a small commit-sized task.
+Pipeline target wall-time: **≤ 5 minutes** for the full APK pipeline
+(`test` || `hello` || `build-apk` → 3× e2e).
+
+A loop tick re-enters this file, picks the lowest **`[ ]`** task that's
+not blocked, runs it in a foreground subagent, marks it `[x]`, commits
+and pushes. Marking blocks higher tasks until they unblock.
+
+Working branch: `ci-anki-scheduler`. Verify on `regress-pre-anki-fix`
+where noted (`regress-verify`).
+
+---
+
+## Phase 1 — CI speedup (aggressive caching)
+
+Baseline (pipeline #24): wall ~10 min, breakdown approx
+- `test` (shared): 1m (parallel with hello, build)
+- `hello-android-kvm`: 30s
+- `build-apk`: 2-3m (gradle from scratch)
+- `apk-e2e`: 50s (npm ci + install + drive)
+- `apk-multicard-e2e`: 1m30s
+- `apk-midstroke-flush-e2e`: 1m45s
+
+Concurrency=1 on the self-hosted runner, so the three e2e jobs serialise
+end-to-end ≈ 4 min on top of the build.
+
+### Tasks
+
+- [ ] **1.1 Mount gradle + npm caches as docker runner volumes.**
+  Edit `/etc/gitlab-runner/config.toml` on the runner host: add
+  `volumes = ["/cache", "gradle-cache:/root/.gradle", "npm-cache:/root/.npm"]`
+  and reload. Verify a second build is markedly faster (target build-apk
+  ≤ 60 s on warm cache). Commit a note in `docker/apk-e2e/README.md`
+  explaining the volume contract — don't commit `config.toml`, it lives
+  on the runner.
+
+- [ ] **1.2 Bake `node_modules` into the `inkstone-apk-e2e:dev` image.**
+  Add a `COPY package.json package-lock.json /app/` then `npm ci
+  --ignore-scripts` step to `docker/apk-e2e/Dockerfile`. The image grows
+  ~150 MB but every job's `npm ci` collapses to ~5 s (cache hit). Bump
+  the image tag (e.g. `:dev-cached`) and update `.gitlab-ci.yml` to
+  match. Confirm e2e jobs lose the npm-install minute.
+
+- [ ] **1.3 Collapse the three APK e2e jobs into one.**
+  New job `apk-tests` does: one APK install, one `adb forward`, one
+  socat bridge, then `node scripts/test-apk-e2e.cjs && node
+  scripts/test-apk-multicard.cjs && node scripts/test-apk-midstroke-flush.cjs`.
+  Between scripts, reset emulator state with `adb shell pm clear "$PKG"
+  || adb uninstall && adb install`. Single artifact dir. Removes ~60 s
+  of duplicated setup across the three jobs.
+
+- [ ] **1.4 Pre-pull `alpine:3.20` and any docker images used by the
+  shared `test` job onto the runner cache.**
+  Less critical (the `test` job runs on GitLab SaaS), but if we ever
+  move the WASM/unit tests to the self-hosted runner, having `node:22`
+  and `alpine:3.20` warm shaves ~10 s per cold spawn.
+
+- [ ] **1.5 Measure and document the new wall-time.**
+  Compare pipelines pre- and post-changes. Update `docker/apk-e2e/README.md`
+  with the new numbers and the caching contract. Target wall ≤ 5 min.
+
+### Phase 1 exit criterion
+Full apk pipeline wall-time ≤ 5 min on a warm runner, three runs in a
+row to confirm not flaky.
+
+---
+
+## Phase 2 — Source-level instrumentation (same branch)
+
+Goal: replace the brittle bundle-byte patch
+(`t._next_card_ref = f` glued into `www/b001ea39….js`) with a real
+debug hook in `client/model/timing.js` that survives a Meteor rebuild.
+
+### Tasks
+
+- [ ] **2.1 Add the hook to `client/model/timing.js`.**
+  Inside the `Timing` class:
+  ```js
+  // For deterministic CI regression of the getNextCard preempt-
+  // reactivity bug (see scripts/test-apk-midstroke-flush.cjs). The
+  // module-private next_card ReactiveVar is otherwise unreachable
+  // once the bundle is compiled.
+  static _next_card_for_test() { return next_card; }
+  ```
+  Note in a comment that the hook is read-only — exposing dep allows
+  invalidation but does not let the test mutate scheduler state.
+
+- [ ] **2.2 Rebuild the Meteor bundle.**
+  Stage 1 of the Dockerfile builds the bundle. Run it locally
+  (`docker build --target meteor-web -t inkstone-web:dev .` or the
+  equivalent) and copy the new `www/<hash>.js` over the in-tree one.
+  Update `www/index.html` if Meteor renamed the file. Commit only the
+  source change plus the regenerated bundle — keep the diff to those
+  files only.
+
+- [ ] **2.3 Drop the bundle byte-patch.**
+  Revert the sed-induced `t._next_card_ref = f` in the in-tree
+  bundle file. The new hook from 2.2 is reached as
+  `require('/client/model/timing').Timing._next_card_for_test()`.
+
+- [ ] **2.4 Switch the midstroke test to the source-level hook.**
+  In `scripts/test-apk-midstroke-flush.cjs`, replace
+  `Timing._next_card_ref.dep.changed()` with
+  `Timing._next_card_for_test().dep.changed()`. The hook-check
+  assertion still reads `!!T._next_card_for_test()`.
+
+- [ ] **2.5 Verify asymmetry.**
+  - On `ci-anki-scheduler` (post-fix): apk-midstroke-flush-e2e
+    must PASS (the wrapper takes the preempt path without reading
+    next_card).
+  - On `regress-pre-anki-fix` (pre-fix): apk-midstroke-flush-e2e
+    must FAIL with `十.successes=0` / `attempts=0` (the dep
+    invalidation fires the autorun mid-stroke).
+  - Once both confirmed, drop `allow_failure: true` from the job.
+
+### Phase 2 exit criterion
+Midstroke job is GREEN on `ci-anki-scheduler` and RED on
+`regress-pre-anki-fix`, both consistently across three runs.
+
+---
+
+## Phase 3 — WASM async fix + assertion updates (same branch as Phase 2)
+
+Goal: make the Anki SM-2 binary actually run on Android 13+ WebView.
+Currently `new WebAssembly.Module(bytes)` is sync-blocked for buffers
+>4 KB, so `patchVocabulary` silently never runs and the scheduler
+falls through to the inkren legacy code. The legacy gives
+~7-day intervals after one correct, which is what our current `apk-e2e`
+and `apk-multicard-e2e` assertions key off.
+
+### Tasks
+
+- [ ] **3.1 Switch the WASM load to `WebAssembly.instantiate(bytes,
+  imports)`.**
+  Update `www/anki-scheduler-patch.js` `initAnkiScheduler` to await
+  the async API. Also install the `getNextCard` wrapper in the
+  `.catch` so failures-queue preemption keeps working even if WASM
+  itself blows up.
+
+- [ ] **3.2 Re-baseline `apk-e2e` and `apk-multicard-e2e`
+  assertions.**
+  Anki SM-2 with `learn_steps=[1,10]` produces:
+  - first "good" on a new card: `failed=true (Learning state)`,
+    `interval=60s`
+  - second "good" on the same card: still Learning, `interval=600s`
+  - third "good": graduates to Review, `interval ≥ 1 day`.
+  Pick one path and update the tests to match. Either:
+    a) assert `interval > 0 && successes === 1 && !lapse` (relaxes
+       the day-bound and accepts learning state); or
+    b) extend the test to drive three correct sessions on the same
+       card so it graduates, and keep `interval ≥ 86400`.
+  Option (a) is faster, option (b) better reflects intent.
+
+- [ ] **3.3 Update `apk-multicard-e2e` lapse assertion.**
+  `三.interval=0` was the legacy fallback; Anki re-learning steps
+  give `interval=60s` on the first wrong stroke. Change to
+  `interval <= 60 && failed === true`.
+
+- [ ] **3.4 Confirm green on both branches.**
+  - `ci-anki-scheduler`: every job ✓ including midstroke.
+  - `regress-pre-anki-fix`: every job ✓ except midstroke which is
+    explicitly red (now without `allow_failure`).
+
+### Phase 3 exit criterion
+Two consecutive green pipelines on `ci-anki-scheduler`. The midstroke
+job is the sole expected failure on `regress-pre-anki-fix`, and the
+job fails for the precise reason documented in its docstring.
+
+---
+
+## Operating notes for the loop
+
+- Each tick re-reads this file. Lowest-numbered `[ ]` task with all
+  predecessors `[x]` is the next one. If you hit something unexpected,
+  add a `[!]` note inline with the diagnosis and skip to the next
+  unblocked task.
+- After each task: mark `[x]`, commit (small, focused), push to
+  `ci-anki-scheduler`. Where the task explicitly says
+  `regress-verify`, cherry-pick to `regress-pre-anki-fix` and push
+  there too.
+- If a task fails its acceptance test, leave it `[ ]`, add the failure
+  diagnosis as a sub-bullet, and pick something orthogonal.
+- Don't unbundle Phase 2 from Phase 3 once Phase 2 starts — both touch
+  the production scheduler path and should ship in one mental coherent
+  change.
