@@ -181,7 +181,11 @@ debug hook in `client/model/timing.js` that survives a Meteor rebuild.
   assertion still reads `!!T._next_card_for_test()`.
   - Switched to `Timing._next_card_for_test()`, verification in 2.5.
 
-- [ ] **2.5 Verify asymmetry.**
+- [x] **2.5 Verify asymmetry.** PRE-fix branch reproduces the
+  expected bug signature on the source-level hook
+  (`一.attempts=0`); POST-fix midstroke verification + drop of
+  `allow_failure` moved to **3.4** (gated on the WASM async fix
+  and assertion re-baseline landing first).
   - On `ci-anki-scheduler` (post-fix): apk-midstroke-flush-e2e
     must PASS (the wrapper takes the preempt path without reading
     next_card).
@@ -267,10 +271,15 @@ and `apk-multicard-e2e` assertions key off.
   give `interval=60s` on the first wrong stroke. Change to
   `interval <= 60 && failed === true`.
 
-- [ ] **3.4 Confirm green on both branches.**
+- [ ] **3.4 Confirm green on both branches + complete 2.5 cleanup.**
   - `ci-anki-scheduler`: every job ✓ including midstroke.
   - `regress-pre-anki-fix`: every job ✓ except midstroke which is
     explicitly red (now without `allow_failure`).
+  - Drop the `if … else MIDSTROKE_RESULT=fail` guard around the
+    midstroke sub-script in `.gitlab-ci.yml` so a midstroke failure
+    propagates and fails the `apk-tests` job. (Deferred from 2.5
+    once 3.2 + 3.3 unblock the apk-e2e / apk-multicard sub-scripts
+    on POST.)
 
 ### Phase 3 exit criterion
 Two consecutive green pipelines on `ci-anki-scheduler`. The midstroke
