@@ -110,6 +110,42 @@ jobs by `adb install -r` (reinstall) and `adb shell pm clear` (clears
 localStorage). The emulator only restarts on host reboot or manual
 intervention.
 
+## Runner caching
+
+The self-hosted runner mounts two named Docker volumes into every job
+container so Gradle and npm don't re-download the world on each
+pipeline:
+
+```
+volumes = ["/cache", "gradle-cache:/root/.gradle", "npm-cache:/root/.npm"]
+```
+
+That line lives in `/etc/gitlab-runner/config.toml` on the runner host
+(`d-claude-host`). It is **not** checked into the repo — `config.toml`
+holds the runner token and is host-local. The volume names
+(`gradle-cache`, `npm-cache`) are stable Docker named volumes managed
+by the runner host. Volume contract:
+
+- `/root/.gradle` — Gradle's user home: dependency cache, wrapper
+  downloads, build cache. Seeded by the first `build-apk` job after
+  the runner is provisioned; subsequent builds reuse compiled
+  dependencies and the wrapper-distributed Gradle binary.
+- `/root/.npm` — the npm package cache (the registry tarball cache,
+  not `node_modules`). Speeds up `npm ci` in e2e jobs.
+
+To bootstrap on a new runner:
+
+```sh
+docker volume create gradle-cache
+docker volume create npm-cache
+# then append the volumes to /etc/gitlab-runner/config.toml and restart
+systemctl restart gitlab-runner
+```
+
+Caches are shared across pipelines on the same runner. To force a
+clean build, `docker volume rm gradle-cache npm-cache` on the host
+(the next pipeline will re-seed them).
+
 ## Image contents
 
 `Dockerfile` builds an image with the Android SDK platform-tools and
