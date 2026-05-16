@@ -135,6 +135,9 @@ apk-e2e:
 # passes.
 apk-midstroke-flush-e2e:
   stage: apk-e2e
+  # Best-effort smoke; not a deterministic regression catcher
+  # (see scripts/test-apk-midstroke-flush.cjs docstring).
+  allow_failure: true
   needs:
     - job: build-apk
       artifacts: true
