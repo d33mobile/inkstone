@@ -138,10 +138,8 @@ apk-tests:
       curl -fs "http://localhost:9222/json" > /dev/null && echo "CDP reachable via local socat"
   script:
     # One shell block — bash functions don't survive across GitLab
-    # `script:` list entries (each is its own shell invocation). The
-    # midstroke run is wrapped in an `if` so its non-zero exit does
-    # not trip `set -e`; this preserves the old `allow_failure: true`
-    # semantics at sub-script granularity.
+    # `script:` list entries (each is its own shell invocation).
+    # `set -e` propagates any sub-script failure (incl. midstroke).
     - |
       set -e
       reset_app() {
