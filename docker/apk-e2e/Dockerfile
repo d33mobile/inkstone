@@ -45,10 +45,16 @@ RUN mkdir -p $ANDROID_SDK_ROOT/cmdline-tools && cd $ANDROID_SDK_ROOT/cmdline-too
 
 WORKDIR /app
 
-# Project deps are installed at runtime against the mounted source. We bake
-# nothing project-specific into the image so it stays cache-friendly.
+# Bake node_modules into the image at /srv/baked so CI jobs can skip the
+# minute-long `npm ci` step. The CI before_script symlinks
+# /srv/baked/node_modules -> ./node_modules. If package-lock.json drifts
+# between this image's bake and the branch under test, rebuild the image
+# (image tag is the contract). Build context must be the repo root, e.g.
+# `docker build -f docker/apk-e2e/Dockerfile -t inkstone-apk-e2e:dev-cached .`
+COPY package.json package-lock.json /srv/baked/
+RUN cd /srv/baked && npm ci --ignore-scripts && npm cache clean --force
 
-COPY entrypoint.sh /entrypoint.sh
+COPY docker/apk-e2e/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

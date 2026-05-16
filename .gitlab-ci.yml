@@ -7,7 +7,7 @@ stages:
 # Anchored image spec — disable the docker image's own ENTRYPOINT
 # (/entrypoint.sh boots the emulator and would fail in a non-KVM container).
 .apk_image: &apk_image
-  name: inkstone-apk-e2e:dev
+  name: inkstone-apk-e2e:dev-cached
   entrypoint: [""]
 
 # Headless browser / scheduler / ordering tests on shared runners (fast, no KVM).
@@ -71,7 +71,7 @@ build-apk:
     - android-kvm
   image: *apk_image
   script:
-    - npm ci --ignore-scripts
+    - ln -sfn /srv/baked/node_modules node_modules
     - bash scripts/stamp-version.sh
     - npx cap sync android
     - cd android && ./gradlew --no-daemon assembleDebug
@@ -100,7 +100,7 @@ apk-e2e:
     ARTIFACTS_DIR: artifacts
   before_script:
     - mkdir -p "$ARTIFACTS_DIR"
-    - npm ci --ignore-scripts
+    - ln -sfn /srv/baked/node_modules node_modules
     - adb devices
     - adb uninstall "$PKG" 2>&1 | tail -1 || true
     - adb install -r "$APK_PATH"
@@ -154,7 +154,7 @@ apk-midstroke-flush-e2e:
     ARTIFACTS_DIR: artifacts
   before_script:
     - mkdir -p "$ARTIFACTS_DIR"
-    - npm ci --ignore-scripts
+    - ln -sfn /srv/baked/node_modules node_modules
     - adb devices
     - adb uninstall "$PKG" 2>&1 | tail -1 || true
     - adb install -r "$APK_PATH"
@@ -198,7 +198,7 @@ apk-multicard-e2e:
     ARTIFACTS_DIR: artifacts
   before_script:
     - mkdir -p "$ARTIFACTS_DIR"
-    - npm ci --ignore-scripts
+    - ln -sfn /srv/baked/node_modules node_modules
     - adb devices
     - adb uninstall "$PKG" 2>&1 | tail -1 || true
     - adb install -r "$APK_PATH"
