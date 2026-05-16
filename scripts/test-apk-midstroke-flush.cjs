@@ -316,7 +316,13 @@ function parseAll(vocab) {
   await ev(cdp, `(() => {
     try {
       const V = require('/client/model/vocabulary').Vocabulary;
-      const ts = Math.floor(Date.now() / 1000) - 10;
+      // Use ts an hour in the past so the seeded entry's
+      // next = ts + scheduling.interval also lands well in the past.
+      // findDueLearningCard skips entries with next > now, so a fresh
+      // 'again' rating (which schedules ~60s out from ts) on a
+      // now-shifted ts puts next in the future and the preempt path
+      // misses the card.
+      const ts = Math.floor(Date.now() / 1000) - 3600;
       // result=3 ('again') marks the card as lapsed: failed=true,
       // attempts:0→1, successes unchanged at 0. The patched
       // updateItem delegates to origUpdateItem when wasm is undefined,
