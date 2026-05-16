@@ -5,6 +5,37 @@ shi2 (十) drawn perfectly, shi2 with three wrong strokes triggering a lapse.
 Assertions read the post-test vocabulary state from `localStorage` to
 verify the Anki scheduler reacted correctly to each scenario.
 
+## Pipeline timings
+
+Baseline (pipeline #24, before Phase 1 caching work): **~10 min wall**.
+
+Steady-state after Phase 1 (pipelines #36 / #37, warm caches, image
+already on the self-hosted runner):
+
+| Pipeline | Wall   | `test` | `hello-android-kvm` | `build-apk` | `apk-tests` |
+| -------- | -----: | -----: | ------------------: | ----------: | ----------: |
+| #36      | 408 s  | 101 s  | 10 s                | 78 s        | 219 s       |
+| #37      | 413 s  | 103 s  | 11 s                | 78 s        | 221 s       |
+
+Where things run:
+
+- `test` — shared GitLab SaaS runner (no `tags:`), runs in parallel with
+  the android-kvm chain.
+- `hello-android-kvm`, `build-apk`, `apk-tests` — self-hosted
+  `android-kvm` runner, `concurrency = 1`, so they serialise. The
+  sequential chain on that runner (hello → build → tests) is the
+  pipeline's critical path: ~308 s of job time plus ~30 s of queue
+  delay between stages.
+
+Target was wall **≤ 300 s (5 min)**. **Not hit** — current steady state
+is ~410 s (6m50s), about 60 % faster than the 10-min baseline but still
+~110 s above target. The bottleneck is `apk-tests` (219 s); it runs
+three e2e sub-scripts back to back with an `adb uninstall && adb
+install -r` between each, and each emulator-side boot/install cycle is
+~30 s on top of the test work itself. Further reduction needs Phase 2/3
+test rework (e.g. shared APK state between scripts, or true parallelism
+which requires a second android-kvm runner).
+
 ## Architecture
 
 ```
@@ -86,7 +117,7 @@ The job in `.gitlab-ci.yml`:
 apk-e2e:
   stage: apk-e2e
   tags: [android-kvm]
-  image: 192.168.56.1:5000/inkstone-apk-e2e:dev
+  image: 192.168.56.1:5000/inkstone-apk-e2e:dev-cached
   variables:
     ANDROID_ADB_SERVER_ADDRESS: 172.17.0.1   # docker0 gateway = host
     ANDROID_ADB_SERVER_PORT: "5037"
@@ -112,34 +143,53 @@ intervention.
 
 ## Runner caching
 
-The self-hosted runner mounts two named Docker volumes into every job
-container so Gradle and npm don't re-download the world on each
-pipeline:
+Three layers of cache keep the android-kvm runner from re-downloading
+the world on every pipeline:
 
-```
-volumes = ["/cache", "gradle-cache:/root/.gradle", "npm-cache:/root/.npm"]
-```
+1. **Named Docker volumes** mounted into every job container. Lives in
+   `/etc/gitlab-runner/config.toml` on the runner host (`d-claude-host`):
+   ```
+   volumes = ["/cache", "gradle-cache:/root/.gradle", "npm-cache:/root/.npm"]
+   ```
+   - `gradle-cache → /root/.gradle` — Gradle's user home: dependency
+     cache, wrapper downloads, build cache. ~870 MB on disk. Seeded by
+     the first `build-apk` after a fresh runner; warm builds reuse
+     compiled dependencies and the wrapper-distributed Gradle binary.
+   - `npm-cache → /root/.npm` — the npm registry tarball cache (not
+     `node_modules`). ~40 MB. Mostly redundant since layer 3 below, but
+     kept as a fallback in case the image-baked `node_modules` ever
+     goes stale.
 
-That line lives in `/etc/gitlab-runner/config.toml` on the runner host
-(`d-claude-host`). It is **not** checked into the repo — `config.toml`
-holds the runner token and is host-local. The volume names
-(`gradle-cache`, `npm-cache`) are stable Docker named volumes managed
-by the runner host. Volume contract:
+   `config.toml` is **not** checked in — it holds the runner token and
+   is host-local. The volume names are stable Docker named volumes
+   managed by the runner host.
 
-- `/root/.gradle` — Gradle's user home: dependency cache, wrapper
-  downloads, build cache. Seeded by the first `build-apk` job after
-  the runner is provisioned; subsequent builds reuse compiled
-  dependencies and the wrapper-distributed Gradle binary.
-- `/root/.npm` — the npm package cache (the registry tarball cache,
-  not `node_modules`). Speeds up `npm ci` in e2e jobs.
+2. **Image-baked `node_modules`** in `inkstone-apk-e2e:dev-cached`. The
+   image's Dockerfile runs `npm ci --ignore-scripts` against the
+   in-tree `package.json` / `package-lock.json` and stores the result
+   at `/srv/baked/node_modules` (~150 MB). Every job's `before_script`
+   does:
+   ```sh
+   ln -sfn /srv/baked/node_modules node_modules
+   ```
+   collapsing `npm ci` to an O(1) symlink. The image tag (`:dev-cached`)
+   is the integrity contract: bump it whenever `package-lock.json`
+   changes.
 
-To bootstrap on a new runner:
+3. **Image itself stays on the runner.** `inkstone-apk-e2e:dev-cached`
+   is ~4.85 GB; it lives in the runner's local Docker storage and is
+   never garbage-collected. Job spawn time is `docker run` against an
+   already-present image (~0.5 s) rather than a registry pull.
+
+Bootstrap on a new runner:
 
 ```sh
 docker volume create gradle-cache
 docker volume create npm-cache
 # then append the volumes to /etc/gitlab-runner/config.toml and restart
 systemctl restart gitlab-runner
+# pre-pull the image
+docker pull 192.168.56.1:5000/inkstone-apk-e2e:dev-cached
 ```
 
 Caches are shared across pipelines on the same runner. To force a

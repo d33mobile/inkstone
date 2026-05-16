@@ -106,9 +106,19 @@ end-to-end ≈ 4 min on top of the build.
     also already cached on the runner (1.13 GB) as a side effect of
     the `dev-cached` image build. Marked done.
 
-- [ ] **1.5 Measure and document the new wall-time.**
+- [x] **1.5 Measure and document the new wall-time.**
   Compare pipelines pre- and post-changes. Update `docker/apk-e2e/README.md`
   with the new numbers and the caching contract. Target wall ≤ 5 min.
+  - Pipeline wall = **408 s** (#36) / **413 s** (#37); target ≤ 300 s
+    achieved? **N** — ~60 % faster than the 10-min baseline but still
+    ~110 s above target. Per-job: test 101–103 s (parallel, shared
+    runner), hello 10–11 s, build-apk 78 s, **apk-tests 219–221 s**
+    (the bottleneck). Critical path is the sequential chain on the
+    `android-kvm` runner (hello → build → tests) ≈ 308 s + ~30 s
+    inter-stage queue. Further reduction needs Phase 2/3 test rework
+    (e.g. shared APK state between sub-scripts) or a second android-kvm
+    runner for parallelism. README documents the three-layer caching
+    contract (gradle volume + npm volume + baked `node_modules`).
 
 ### Phase 1 exit criterion
 Full apk pipeline wall-time ≤ 5 min on a warm runner, three runs in a
