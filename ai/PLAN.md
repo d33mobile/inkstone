@@ -41,12 +41,21 @@ end-to-end ≈ 4 min on top of the build.
     configuration + kotlin/dex work that the volume cache doesn't
     help with. Volumes are 867 MB gradle + 39 MB npm on disk.
 
-- [ ] **1.2 Bake `node_modules` into the `inkstone-apk-e2e:dev` image.**
+- [x] **1.2 Bake `node_modules` into the `inkstone-apk-e2e:dev` image.**
   Add a `COPY package.json package-lock.json /app/` then `npm ci
   --ignore-scripts` step to `docker/apk-e2e/Dockerfile`. The image grows
   ~150 MB but every job's `npm ci` collapses to ~5 s (cache hit). Bump
   the image tag (e.g. `:dev-cached`) and update `.gitlab-ci.yml` to
   match. Confirm e2e jobs lose the npm-install minute.
+  - Wall-time: apk-e2e **119 s → 115 s**, apk-midstroke-flush-e2e
+    **84 s → 66 s**, build-apk **83 s → 81 s** (pipeline #27 → #29).
+    Smaller delta than predicted because task 1.1's `/root/.npm` volume
+    already collapsed `npm ci` to ~4 s on warm cache; this swap replaces
+    that with a O(1) symlink and adds a cache-loss safety net (image
+    tag is the integrity contract). Image grew 4.75 GB → 4.85 GB.
+    Implementation: bake into `/srv/baked/node_modules`, every e2e +
+    build-apk `before_script` does `ln -sfn /srv/baked/node_modules
+    node_modules`; tag bumped `:dev` → `:dev-cached`.
 
 - [ ] **1.3 Collapse the three APK e2e jobs into one.**
   New job `apk-tests` does: one APK install, one `adb forward`, one
