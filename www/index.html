@@ -23,6 +23,20 @@
 BUILD_DATE = '2026-03-28 18:04';
 BUILD_VERSION = '0.2.0';
 </script>
+  <script type="text/javascript" src="/sentry.min.js"></script>
+  <script type="text/javascript">
+    if (typeof Sentry !== 'undefined') {
+      Sentry.init({
+        dsn: 'https://2d9b8225a36fa5830d7a9efa870b915a@o4504672435175424.ingest.us.sentry.io/4511403844501504',
+        release: 'inkstone-android@' + (typeof BUILD_VERSION !== 'undefined' ? BUILD_VERSION : '0.0.0'),
+        environment: 'production',
+        sampleRate: 1.0,
+        // No tracing/replay — keep the wire footprint tiny for offline use.
+        integrations: [Sentry.globalHandlersIntegration({ onerror: true, onunhandledrejection: true })],
+      });
+      window.__sentryReady = true;
+    }
+  </script>
   <script type="text/javascript" src="/b001ea39fb8fb87a70ce23be83c16753750f7fdc.js?meteor_js_resource=true"></script>
   <script type="text/javascript" src="/anki-scheduler-patch.js"></script>
 
