@@ -1,0 +1,66 @@
+# Reproducible local + CI runner for the APK end-to-end test.
+#
+# Architecture: the Android emulator runs on the host (not in any container)
+# because nested-virt + KVM in a Docker container deadlocks the emulator's
+# qemu vCPU threads. Tests run in this container which only has network
+# access to the host's adb daemon — no /dev/kvm, no privileged mode, no
+# Docker socket, no bind mounts to host paths.
+#
+# Bring-up:
+#   1. On the host, start the emulator and expose adb on all interfaces:
+#        emulator -avd <name> -no-window -no-audio -gpu swiftshader_indirect &
+#        adb kill-server
+#        adb -a -P 5037 nodaemon server &
+#   2. Pre-publish the WebView devtools port (run once after the app starts):
+#        adb shell monkey -p me.skishore.inkstone -c android.intent.category.LAUNCHER 1
+#        WS=$(adb shell cat /proc/net/unix | awk '/webview_devtools_remote/{print $NF; exit}' | tr -d '\r')
+#        adb forward tcp:9222 localabstract:"${WS#@}"
+#   3. docker compose run --rm apk-e2e
+#
+# In CI, the host emulator + forward are managed by the runner setup
+# (see the apk-e2e job in .gitlab-ci.yml). The container itself is
+# identical to local.
+
+services:
+  apk-e2e:
+    build:
+      context: ../..
+      dockerfile: docker/apk-e2e/Dockerfile
+    image: inkstone-apk-e2e:dev
+    # Network: bridge (default). Host is reachable as the gateway IP, which
+    # this compose makes available as `adb-host` so the test code never
+    # hard-codes 172.17.0.1.
+    extra_hosts:
+      - "adb-host:host-gateway"
+    environment:
+      # Where the host's adb daemon listens
+      ANDROID_ADB_SERVER_ADDRESS: adb-host
+      ANDROID_ADB_SERVER_PORT: "5037"
+      # Where the host has forwarded the WebView's devtools port
+      CDP_HOST: adb-host
+      CDP_PORT: "9222"
+      APK_PATH: /apk/inkstone.apk
+      PKG: me.skishore.inkstone
+    volumes:
+      # APK is mounted read-only; everything else is in the container image.
+      - type: bind
+        source: ${APK_PATH:-../../android/app/build/outputs/apk/debug/app-debug.apk}
+        target: /apk/inkstone.apk
+        read_only: true
+      # Artifacts directory (screenshots, emu log if mirrored)
+      - type: bind
+        source: ${ARTIFACTS_DIR:-/tmp/apk-e2e-artifacts}
+        target: /artifacts
+    # No /dev/kvm, no privileged, no host mounts: the container has only
+    # network access. Override the image's emulator-booting entrypoint —
+    # the emulator is already running on the host.
+    entrypoint: ["/bin/bash", "-lc"]
+    command: |
+      set -e
+      cd /app
+      adb devices
+      adb install -r "$$APK_PATH"
+      adb shell pm grant "$$PKG" android.permission.POST_NOTIFICATIONS || true
+      adb shell monkey -p "$$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null
+      sleep 8
+      node scripts/test-apk-e2e.cjs

@@ -223,6 +223,16 @@ class Timing {
   static completeCard(card, result) { completeCard(card, result); }
   static continueSession() { timing.set(newCounts(Date.timestamp())); }
   static getNextCard() { return next_card.get(); }
+  // For deterministic CI regression of the getNextCard preempt-
+  // reactivity bug (see scripts/test-apk-midstroke-flush.cjs). The
+  // module-private next_card ReactiveVar is otherwise unreachable
+  // once the bundle is compiled.
+  //
+  // Read-only: returns the ReactiveVar itself so tests can call
+  // `.dep.changed()` to invalidate dependents, but the test cannot
+  // mutate scheduler state (no `.set()` is exposed by intent — calling
+  // it would race against the real scheduler writers).
+  static _next_card_for_test() { return next_card; }
   static getRemainder() { return remainder.get(); }
   static getTimeLeft() { return time_left.get(); }
   static shuffle() { shuffle(); }
